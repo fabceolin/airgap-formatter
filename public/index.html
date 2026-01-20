@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Security-first, offline JSON formatting tool. All processing happens locally.">
+    <meta name="theme-color" content="#1e1e1e">
+    <link rel="manifest" href="/manifest.json">
+    <title>Airgap JSON Formatter - Verification</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #4ec9b0;
+            margin-bottom: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #0078d4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #106ebe;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        select {
+            background: #2d2d2d;
+            color: #d4d4d4;
+            border: 1px solid #3c3c3c;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .panes {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 900px) {
+            .panes {
+                grid-template-columns: 1fr;
+            }
+        }
+        .pane {
+            display: flex;
+            flex-direction: column;
+        }
+        .pane-header {
+            background: #2d2d2d;
+            padding: 10px 15px;
+            border-radius: 4px 4px 0 0;
+            font-weight: 500;
+        }
+        textarea {
+            width: 100%;
+            height: 400px;
+            background: #252526;
+            color: #d4d4d4;
+            border: 1px solid #3c3c3c;
+            border-top: none;
+            padding: 15px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            resize: vertical;
+            border-radius: 0 0 4px 4px;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #0078d4;
+        }
+        .status {
+            margin-top: 15px;
+            padding: 10px 15px;
+            background: #2d2d2d;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .status.valid {
+            border-left: 4px solid #4ec9b0;
+        }
+        .status.invalid {
+            border-left: 4px solid #f44747;
+        }
+        .status.loading {
+            border-left: 4px solid #0078d4;
+        }
+        .stats {
+            color: #808080;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Airgap JSON Formatter</h1>
+        <p style="color: #808080; margin-bottom: 20px;">
+            This is a verification page for the Rust WASM module.
+            All processing happens locally in your browser.
+        </p>
+
+        <div class="controls">
+            <button id="formatBtn" disabled>Format</button>
+            <button id="minifyBtn" disabled>Minify</button>
+            <select id="indentSelect">
+                <option value="spaces:2">2 spaces</option>
+                <option value="spaces:4" selected>4 spaces</option>
+                <option value="tabs">Tabs</option>
+            </select>
+            <button id="copyBtn" disabled>Copy Output</button>
+            <button id="clearBtn">Clear</button>
+        </div>
+
+        <div class="panes">
+            <div class="pane">
+                <div class="pane-header">Input JSON</div>
+                <textarea id="input" placeholder="Paste or type JSON here..."></textarea>
+            </div>
+            <div class="pane">
+                <div class="pane-header">Output</div>
+                <textarea id="output" readonly placeholder="Formatted output will appear here"></textarea>
+            </div>
+        </div>
+
+        <div id="status" class="status loading">Loading WASM module...</div>
+    </div>
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('[App] Service Worker registered:', registration.scope);
+
+                        // Check for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New version available
+                                    console.log('[App] New version available! Refresh to update.');
+                                    window.dispatchEvent(new CustomEvent('swUpdate'));
+                                }
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                        console.error('[App] Service Worker registration failed:', error);
+                    });
+            });
+        }
+    </script>
+
+    <script type="module">
+        import init, { greet, formatJson, minifyJson, validateJson } from './pkg/airgap_json_formatter.js';
+
+        const inputEl = document.getElementById('input');
+        const outputEl = document.getElementById('output');
+        const statusEl = document.getElementById('status');
+        const formatBtn = document.getElementById('formatBtn');
+        const minifyBtn = document.getElementById('minifyBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const indentSelect = document.getElementById('indentSelect');
+
+        let wasmReady = false;
+
+        // Initialize WASM module
+        async function initWasm() {
+            try {
+                await init();
+                const greeting = greet();
+                console.log('[Airgap]', greeting);
+
+                wasmReady = true;
+                formatBtn.disabled = false;
+                minifyBtn.disabled = false;
+                copyBtn.disabled = false;
+
+                updateStatus();
+                console.log('[Airgap] Zero network requests - all processing local');
+            } catch (e) {
+                statusEl.textContent = 'Failed to load WASM: ' + e.message;
+                statusEl.className = 'status invalid';
+                console.error('[Airgap] WASM load error:', e);
+            }
+        }
+
+        // Update validation status
+        function updateStatus() {
+            if (!wasmReady) return;
+
+            const input = inputEl.value.trim();
+            if (!input) {
+                statusEl.textContent = 'Ready - paste JSON to begin';
+                statusEl.className = 'status loading';
+                return;
+            }
+
+            try {
+                const result = JSON.parse(validateJson(input));
+                if (result.isValid) {
+                    const stats = result.stats;
+                    statusEl.innerHTML = `
+                        <strong style="color: #4ec9b0;">Valid JSON</strong>
+                        <div class="stats">
+                            Objects: ${stats.objectCount} |
+                            Arrays: ${stats.arrayCount} |
+                            Keys: ${stats.totalKeys} |
+                            Depth: ${stats.maxDepth}
+                        </div>
+                    `;
+                    statusEl.className = 'status valid';
+                } else {
+                    const err = result.error;
+                    statusEl.innerHTML = `
+                        <strong style="color: #f44747;">Invalid JSON</strong>
+                        <div>Line ${err.line}, Column ${err.column}: ${err.message}</div>
+                    `;
+                    statusEl.className = 'status invalid';
+                }
+            } catch (e) {
+                statusEl.textContent = 'Validation error: ' + e.message;
+                statusEl.className = 'status invalid';
+            }
+        }
+
+        // Format JSON
+        function format() {
+            if (!wasmReady) return;
+            try {
+                const indent = indentSelect.value;
+                const result = formatJson(inputEl.value, indent);
+                outputEl.value = result;
+            } catch (e) {
+                outputEl.value = 'Error: ' + e;
+            }
+        }
+
+        // Minify JSON
+        function minify() {
+            if (!wasmReady) return;
+            try {
+                const result = minifyJson(inputEl.value);
+                outputEl.value = result;
+            } catch (e) {
+                outputEl.value = 'Error: ' + e;
+            }
+        }
+
+        // Copy output
+        async function copyOutput() {
+            try {
+                await navigator.clipboard.writeText(outputEl.value);
+                const original = copyBtn.textContent;
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => copyBtn.textContent = original, 1500);
+            } catch (e) {
+                console.error('Copy failed:', e);
+            }
+        }
+
+        // Clear all
+        function clear() {
+            inputEl.value = '';
+            outputEl.value = '';
+            updateStatus();
+        }
+
+        // Event listeners
+        formatBtn.addEventListener('click', format);
+        minifyBtn.addEventListener('click', minify);
+        copyBtn.addEventListener('click', copyOutput);
+        clearBtn.addEventListener('click', clear);
+
+        // Debounced validation on input
+        let debounceTimer;
+        inputEl.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(updateStatus, 300);
+        });
+
+        // Initialize
+        initWasm();
+    </script>
+</body>
+</html>

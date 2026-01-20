@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  QT_VERSION: '6.10.0'
+  EMSDK_VERSION: '4.0.7'
+
+jobs:
+  rust-tests:
+    runs-on: ubuntu-latest
+    name: Rust Tests
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run tests
+        run: cargo test --verbose
+
+      - name: Run release tests (performance)
+        run: cargo test --release -- --ignored
+
+  rust-wasm-build:
+    runs-on: ubuntu-latest
+    name: Rust WASM Build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-wasm-
+
+      - name: Build WASM target
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Install wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli
+
+      - name: Install binaryen (wasm-opt)
+        run: sudo apt-get update && sudo apt-get install -y binaryen
+
+      - name: Generate JS bindings
+        run: |
+          mkdir -p dist/pkg
+          wasm-bindgen target/wasm32-unknown-unknown/release/airgap_json_formatter.wasm \
+              --out-dir dist/pkg \
+              --typescript \
+              --target web
+
+      - name: Optimize WASM
+        run: |
+          wasm-opt -O3 dist/pkg/airgap_json_formatter_bg.wasm \
+              -o dist/pkg/airgap_json_formatter_bg.wasm
+
+      - name: Check WASM size
+        run: |
+          SIZE=$(stat -c%s dist/pkg/airgap_json_formatter_bg.wasm)
+          echo "WASM size: $SIZE bytes ($(($SIZE / 1024)) KB)"
+          # Fail if size exceeds 2MB (2097152 bytes)
+          if [ $SIZE -gt 2097152 ]; then
+            echo "ERROR: WASM size exceeds 2MB limit"
+            exit 1
+          fi
+          # Check gzipped size
+          gzip -k dist/pkg/airgap_json_formatter_bg.wasm
+          GZIP_SIZE=$(stat -c%s dist/pkg/airgap_json_formatter_bg.wasm.gz)
+          echo "Gzipped size: $GZIP_SIZE bytes ($(($GZIP_SIZE / 1024)) KB)"
+          # Fail if gzipped size exceeds 500KB (512000 bytes)
+          if [ $GZIP_SIZE -gt 512000 ]; then
+            echo "ERROR: Gzipped WASM size exceeds 500KB limit"
+            exit 1
+          fi
+
+      - name: Copy static assets
+        run: cp -r public/* dist/
+
+      - name: List build artifacts
+        run: ls -la dist/pkg/
+
+      - name: Upload Rust WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-wasm-build
+          path: dist/
+
+  qt-wasm-build:
+    runs-on: ubuntu-24.04
+    name: Qt WASM Build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+          actions-cache-folder: 'emsdk-cache'
+
+      - name: Verify Emscripten
+        run: emcc --version
+
+      - name: Install Qt WASM
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: 'all_os'
+          target: 'wasm'
+          arch: 'wasm_singlethread'
+          modules: 'qtshadertools'
+          cache: true
+
+      - name: Build Qt WASM
+        run: |
+          cd qt
+          mkdir -p build && cd build
+
+          # Find and use qt-cmake
+          QT_CMAKE=$(find $QT_ROOT_DIR -name "qt-cmake" -type f | head -1)
+          echo "Using qt-cmake: $QT_CMAKE"
+
+          $QT_CMAKE .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --parallel $(nproc)
+
+      - name: List Qt build output
+        run: |
+          echo "=== Qt WASM Build Output ==="
+          ls -la qt/build/
+          echo ""
+          echo "=== WASM files ==="
+          find qt/build -name "*.wasm" -exec ls -lh {} \;
+
+      - name: Upload Qt WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qt-wasm-build
+          path: |
+            qt/build/*.wasm
+            qt/build/*.js
+            qt/build/*.html

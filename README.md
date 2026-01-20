@@ -2,6 +2,18 @@
 
 **Airgap JSON Formatter** is a security-first tool for manipulating JSON data. It combines the performance and safety of **Rust** with a robust **Qt** interface, delivered entirely via the browser using **WebAssembly**.
 
+## Live Demo
+
+**[Launch Airgap JSON Formatter](https://YOUR_USERNAME.github.io/airgap-json-formatter/)**
+
+### Quick Start
+1. Open the app in your browser
+2. Paste or type JSON in the left pane
+3. Click "Format" to prettify or "Minify" to compress
+4. Copy the result to clipboard
+
+The app works completely offline once loaded - feel free to disconnect from the internet!
+
 ## 🔒 Privacy & Security Architecture
 
 **Critical Notice:**
@@ -25,17 +37,34 @@ Despite being hosted on the web, this application executes **100% client-side**.
 * **Strict Validation:** Instant syntax checking and error reporting.
 * **Privacy-Guaranteed:** Designed specifically for developers handling sensitive production data.
 
-## 🛠️ Build & Development
+## Build & Development
 
 ### Prerequisites
 
-* Rust toolchain (`stable`)
-* Qt 6 Development Libraries
+* Rust toolchain (stable, 1.70+)
 * `wasm32-unknown-unknown` target
 
-### Local Build (Native)
+### Development Setup
 
-To run the Qt application as a native desktop binary:
+```bash
+# Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Add WebAssembly target
+rustup target add wasm32-unknown-unknown
+```
+
+### Build Commands
+
+```bash
+# Run tests
+cargo test
+
+# Build WebAssembly target
+cargo build --target wasm32-unknown-unknown --release
+```
+
+### Local Build (Native - for testing)
 
 ```bash
 cargo run --release
