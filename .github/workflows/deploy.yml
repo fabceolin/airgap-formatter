@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
@@ -46,8 +46,8 @@ jobs:
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli
 
-      - name: Install binaryen (wasm-opt)
-        run: sudo apt-get update && sudo apt-get install -y binaryen
+      # Note: wasm-opt skipped due to table growth bug in versions 108-118
+      # https://github.com/AztecProtocol/aztec-packages/issues/12379
 
       - name: Build Rust WASM
         run: |
@@ -57,8 +57,6 @@ jobs:
               --out-dir dist/pkg \
               --typescript \
               --target web
-          wasm-opt -O3 dist/pkg/airgap_json_formatter_bg.wasm \
-              -o dist/pkg/airgap_json_formatter_bg.wasm
 
       - name: Check Rust WASM size
         run: |

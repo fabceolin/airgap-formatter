@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
@@ -51,7 +51,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
@@ -72,8 +72,7 @@ jobs:
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli
 
-      - name: Install binaryen (wasm-opt)
-        run: sudo apt-get update && sudo apt-get install -y binaryen
+      # Note: wasm-opt skipped due to table growth bug in versions 108-118
 
       - name: Generate JS bindings
         run: |
@@ -82,11 +81,6 @@ jobs:
               --out-dir dist/pkg \
               --typescript \
               --target web
-
-      - name: Optimize WASM
-        run: |
-          wasm-opt -O3 dist/pkg/airgap_json_formatter_bg.wasm \
-              -o dist/pkg/airgap_json_formatter_bg.wasm
 
       - name: Check WASM size
         run: |
