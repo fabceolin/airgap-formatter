@@ -148,8 +148,9 @@ jobs:
           # Find and use qt-cmake
           QT_CMAKE=$(find $QT_ROOT_DIR -name "qt-cmake" -type f | head -1)
           echo "Using qt-cmake: $QT_CMAKE"
+          chmod +x "$QT_CMAKE"
 
-          $QT_CMAKE .. -DCMAKE_BUILD_TYPE=Release
+          "$QT_CMAKE" .. -DCMAKE_BUILD_TYPE=Release
           cmake --build . --parallel $(nproc)
 
       - name: List Qt build output

@@ -108,9 +108,10 @@ jobs:
           # Find qt-cmake
           QT_CMAKE=$(find $QT_ROOT_DIR -name "qt-cmake" -type f | head -1)
           echo "Using qt-cmake: $QT_CMAKE"
+          chmod +x "$QT_CMAKE"
 
           # Configure with CMake
-          $QT_CMAKE .. -DCMAKE_BUILD_TYPE=Release
+          "$QT_CMAKE" .. -DCMAKE_BUILD_TYPE=Release
 
           # Build
           cmake --build . --parallel $(nproc)
