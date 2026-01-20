@@ -126,5 +126,5 @@ const JsonBridge = {
 window.JsonBridge = JsonBridge;
 window.initBridge = initBridge;
 
-// Auto-initialize when loaded (optional)
-// initBridge();
+// ES module exports for modern usage
+export { initBridge, JsonBridge };

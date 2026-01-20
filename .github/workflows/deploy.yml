@@ -138,15 +138,12 @@ jobs:
 
       - name: Copy static assets
         run: |
-          # Copy public assets (don't overwrite Qt's index.html if it exists)
+          # Copy all public assets to dist
+          cp public/index.html dist/
           cp public/bridge.js dist/
           cp public/sw.js dist/
           cp public/manifest.json dist/
           cp public/404.html dist/
-          # Keep Qt's generated index.html or use ours as fallback
-          if [ ! -f "dist/airgap_formatter.html" ]; then
-            cp public/index.html dist/
-          fi
 
       - name: List build artifacts
         run: |

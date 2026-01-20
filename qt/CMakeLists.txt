@@ -36,7 +36,15 @@ target_link_libraries(airgap_formatter PRIVATE
 
 # WebAssembly-specific settings
 if(EMSCRIPTEN)
+    # Use .js output to avoid EXPORT_NAME + HTML shell conflict
+    # We provide our own index.html that loads the Qt WASM module
     set_target_properties(airgap_formatter PROPERTIES
-        SUFFIX ".html"
+        SUFFIX ".js"
+    )
+
+    # Required link options for Qt WASM
+    target_link_options(airgap_formatter PRIVATE
+        -sEXPORT_NAME=createQtAppInstance
+        -sASYNCIFY
     )
 endif()

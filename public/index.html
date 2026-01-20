@@ -6,147 +6,69 @@
     <meta name="description" content="Security-first, offline JSON formatting tool. All processing happens locally.">
     <meta name="theme-color" content="#1e1e1e">
     <link rel="manifest" href="/manifest.json">
-    <title>Airgap JSON Formatter - Verification</title>
+    <title>Airgap JSON Formatter</title>
     <style>
         * {
             box-sizing: border-box;
         }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1e1e1e;
-            color: #d4d4d4;
+        html, body {
             margin: 0;
-            padding: 20px;
-        }
-        h1 {
-            color: #4ec9b0;
-            margin-bottom: 20px;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        .controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-        button {
-            background: #0078d4;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        button:hover {
-            background: #106ebe;
-        }
-        button:disabled {
-            background: #555;
-            cursor: not-allowed;
-        }
-        select {
-            background: #2d2d2d;
-            color: #d4d4d4;
-            border: 1px solid #3c3c3c;
-            padding: 10px;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        .panes {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        @media (max-width: 900px) {
-            .panes {
-                grid-template-columns: 1fr;
-            }
-        }
-        .pane {
-            display: flex;
-            flex-direction: column;
-        }
-        .pane-header {
-            background: #2d2d2d;
-            padding: 10px 15px;
-            border-radius: 4px 4px 0 0;
-            font-weight: 500;
-        }
-        textarea {
+            padding: 0;
             width: 100%;
-            height: 400px;
-            background: #252526;
+            height: 100%;
+            overflow: hidden;
+            background: #1e1e1e;
+        }
+        #qt-container {
+            width: 100%;
+            height: 100%;
+        }
+        #qt-container canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             color: #d4d4d4;
-            border: 1px solid #3c3c3c;
-            border-top: none;
-            padding: 15px;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 14px;
-            resize: vertical;
-            border-radius: 0 0 4px 4px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            text-align: center;
         }
-        textarea:focus {
-            outline: none;
-            border-color: #0078d4;
+        .loading h1 {
+            color: #4ec9b0;
+            margin-bottom: 10px;
         }
-        .status {
-            margin-top: 15px;
-            padding: 10px 15px;
-            background: #2d2d2d;
-            border-radius: 4px;
-            font-size: 13px;
+        .loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #3c3c3c;
+            border-top-color: #0078d4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
         }
-        .status.valid {
-            border-left: 4px solid #4ec9b0;
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
-        .status.invalid {
-            border-left: 4px solid #f44747;
-        }
-        .status.loading {
-            border-left: 4px solid #0078d4;
-        }
-        .stats {
+        .loading .status {
             color: #808080;
-            margin-top: 5px;
+            font-size: 14px;
+        }
+        .error {
+            color: #f44747;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Airgap JSON Formatter</h1>
-        <p style="color: #808080; margin-bottom: 20px;">
-            This is a verification page for the Rust WASM module.
-            All processing happens locally in your browser.
-        </p>
-
-        <div class="controls">
-            <button id="formatBtn" disabled>Format</button>
-            <button id="minifyBtn" disabled>Minify</button>
-            <select id="indentSelect">
-                <option value="spaces:2">2 spaces</option>
-                <option value="spaces:4" selected>4 spaces</option>
-                <option value="tabs">Tabs</option>
-            </select>
-            <button id="copyBtn" disabled>Copy Output</button>
-            <button id="clearBtn">Clear</button>
+    <div id="qt-container">
+        <div class="loading" id="loading">
+            <h1>Airgap JSON Formatter</h1>
+            <div class="spinner"></div>
+            <div class="status" id="status">Loading Qt WASM...</div>
         </div>
-
-        <div class="panes">
-            <div class="pane">
-                <div class="pane-header">Input JSON</div>
-                <textarea id="input" placeholder="Paste or type JSON here..."></textarea>
-            </div>
-            <div class="pane">
-                <div class="pane-header">Output</div>
-                <textarea id="output" readonly placeholder="Formatted output will appear here"></textarea>
-            </div>
-        </div>
-
-        <div id="status" class="status loading">Loading WASM module...</div>
     </div>
 
     <!-- Service Worker Registration -->
@@ -156,18 +78,6 @@
                 navigator.serviceWorker.register('/sw.js')
                     .then((registration) => {
                         console.log('[App] Service Worker registered:', registration.scope);
-
-                        // Check for updates
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // New version available
-                                    console.log('[App] New version available! Refresh to update.');
-                                    window.dispatchEvent(new CustomEvent('swUpdate'));
-                                }
-                            });
-                        });
                     })
                     .catch((error) => {
                         console.error('[App] Service Worker registration failed:', error);
@@ -176,137 +86,92 @@
         }
     </script>
 
+    <!-- Qt WASM Loader -->
     <script type="module">
-        import init, { greet, formatJson, minifyJson, validateJson } from './pkg/airgap_json_formatter.js';
+        // First, initialize the Rust WASM bridge for JSON processing
+        import { initBridge } from './bridge.js';
 
-        const inputEl = document.getElementById('input');
-        const outputEl = document.getElementById('output');
         const statusEl = document.getElementById('status');
-        const formatBtn = document.getElementById('formatBtn');
-        const minifyBtn = document.getElementById('minifyBtn');
-        const copyBtn = document.getElementById('copyBtn');
-        const clearBtn = document.getElementById('clearBtn');
-        const indentSelect = document.getElementById('indentSelect');
+        const loadingEl = document.getElementById('loading');
 
-        let wasmReady = false;
-
-        // Initialize WASM module
-        async function initWasm() {
+        async function init() {
             try {
-                await init();
-                const greeting = greet();
-                console.log('[Airgap]', greeting);
+                // Initialize Rust WASM for JSON processing
+                statusEl.textContent = 'Loading JSON processor...';
+                await initBridge();
+                console.log('[Airgap] Rust WASM JSON processor ready');
 
-                wasmReady = true;
-                formatBtn.disabled = false;
-                minifyBtn.disabled = false;
-                copyBtn.disabled = false;
+                // Now load Qt WASM for the GUI
+                statusEl.textContent = 'Loading Qt interface...';
 
-                updateStatus();
+                // Load Qt WASM module
+                const { default: createQtAppInstance } = await import('./airgap_formatter.js');
+
+                const config = {
+                    canvasElements: [],
+                    showLoader: false,
+                    onLoaded: () => {
+                        console.log('[Airgap] Qt WASM loaded');
+                        loadingEl.style.display = 'none';
+                    },
+                    onExit: (code) => {
+                        console.log('[Airgap] Qt WASM exited with code:', code);
+                    },
+                    containerElements: [document.getElementById('qt-container')],
+                };
+
+                // Create the Qt instance
+                const instance = await createQtAppInstance(config);
+                console.log('[Airgap] Qt application started');
                 console.log('[Airgap] Zero network requests - all processing local');
-            } catch (e) {
-                statusEl.textContent = 'Failed to load WASM: ' + e.message;
-                statusEl.className = 'status invalid';
-                console.error('[Airgap] WASM load error:', e);
+
+            } catch (error) {
+                console.error('[Airgap] Initialization failed:', error);
+                statusEl.innerHTML = `<span class="error">Failed to load: ${error.message}</span>`;
+
+                // Fall back to basic HTML interface if Qt fails
+                setTimeout(() => {
+                    statusEl.innerHTML += '<br><br>Loading fallback interface...';
+                    loadFallback();
+                }, 2000);
             }
         }
 
-        // Update validation status
-        function updateStatus() {
-            if (!wasmReady) return;
-
-            const input = inputEl.value.trim();
-            if (!input) {
-                statusEl.textContent = 'Ready - paste JSON to begin';
-                statusEl.className = 'status loading';
-                return;
-            }
-
-            try {
-                const result = JSON.parse(validateJson(input));
-                if (result.isValid) {
-                    const stats = result.stats;
-                    statusEl.innerHTML = `
-                        <strong style="color: #4ec9b0;">Valid JSON</strong>
-                        <div class="stats">
-                            Objects: ${stats.objectCount} |
-                            Arrays: ${stats.arrayCount} |
-                            Keys: ${stats.totalKeys} |
-                            Depth: ${stats.maxDepth}
+        async function loadFallback() {
+            // Load a simple fallback interface if Qt WASM fails
+            document.body.innerHTML = `
+                <div style="padding: 20px; font-family: -apple-system, sans-serif; background: #1e1e1e; color: #d4d4d4; min-height: 100vh;">
+                    <h1 style="color: #4ec9b0;">Airgap JSON Formatter</h1>
+                    <p style="color: #808080;">Qt WASM failed to load. Using fallback interface.</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 5px;">Input JSON</label>
+                            <textarea id="input" style="width: 100%; height: 300px; background: #252526; color: #d4d4d4; border: 1px solid #3c3c3c; padding: 10px; font-family: monospace;"></textarea>
                         </div>
-                    `;
-                    statusEl.className = 'status valid';
-                } else {
-                    const err = result.error;
-                    statusEl.innerHTML = `
-                        <strong style="color: #f44747;">Invalid JSON</strong>
-                        <div>Line ${err.line}, Column ${err.column}: ${err.message}</div>
-                    `;
-                    statusEl.className = 'status invalid';
-                }
-            } catch (e) {
-                statusEl.textContent = 'Validation error: ' + e.message;
-                statusEl.className = 'status invalid';
-            }
+                        <div>
+                            <label style="display: block; margin-bottom: 5px;">Output</label>
+                            <textarea id="output" readonly style="width: 100%; height: 300px; background: #252526; color: #d4d4d4; border: 1px solid #3c3c3c; padding: 10px; font-family: monospace;"></textarea>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button onclick="formatJson()" style="background: #0078d4; color: white; border: none; padding: 10px 20px; cursor: pointer;">Format</button>
+                        <button onclick="minifyJson()" style="background: #0078d4; color: white; border: none; padding: 10px 20px; cursor: pointer; margin-left: 10px;">Minify</button>
+                    </div>
+                    <div id="status" style="margin-top: 10px; color: #808080;"></div>
+                </div>
+            `;
+
+            window.formatJson = () => {
+                const result = window.JsonBridge.formatJson(document.getElementById('input').value, 'spaces:4');
+                document.getElementById('output').value = result.success ? result.result : result.error;
+            };
+            window.minifyJson = () => {
+                const result = window.JsonBridge.minifyJson(document.getElementById('input').value);
+                document.getElementById('output').value = result.success ? result.result : result.error;
+            };
         }
 
-        // Format JSON
-        function format() {
-            if (!wasmReady) return;
-            try {
-                const indent = indentSelect.value;
-                const result = formatJson(inputEl.value, indent);
-                outputEl.value = result;
-            } catch (e) {
-                outputEl.value = 'Error: ' + e;
-            }
-        }
-
-        // Minify JSON
-        function minify() {
-            if (!wasmReady) return;
-            try {
-                const result = minifyJson(inputEl.value);
-                outputEl.value = result;
-            } catch (e) {
-                outputEl.value = 'Error: ' + e;
-            }
-        }
-
-        // Copy output
-        async function copyOutput() {
-            try {
-                await navigator.clipboard.writeText(outputEl.value);
-                const original = copyBtn.textContent;
-                copyBtn.textContent = 'Copied!';
-                setTimeout(() => copyBtn.textContent = original, 1500);
-            } catch (e) {
-                console.error('Copy failed:', e);
-            }
-        }
-
-        // Clear all
-        function clear() {
-            inputEl.value = '';
-            outputEl.value = '';
-            updateStatus();
-        }
-
-        // Event listeners
-        formatBtn.addEventListener('click', format);
-        minifyBtn.addEventListener('click', minify);
-        copyBtn.addEventListener('click', copyOutput);
-        clearBtn.addEventListener('click', clear);
-
-        // Debounced validation on input
-        let debounceTimer;
-        inputEl.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(updateStatus, 300);
-        });
-
-        // Initialize
-        initWasm();
+        init();
     </script>
 </body>
 </html>
