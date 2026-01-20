@@ -96,9 +96,10 @@ jobs:
           gzip -k dist/pkg/airgap_json_formatter_bg.wasm
           GZIP_SIZE=$(stat -c%s dist/pkg/airgap_json_formatter_bg.wasm.gz)
           echo "Gzipped size: $GZIP_SIZE bytes ($(($GZIP_SIZE / 1024)) KB)"
-          # Fail if gzipped size exceeds 500KB (512000 bytes)
-          if [ $GZIP_SIZE -gt 512000 ]; then
-            echo "ERROR: Gzipped WASM size exceeds 500KB limit"
+          # Fail if gzipped size exceeds 700KB (716800 bytes)
+          # Note: Increased from 500KB to accommodate syntect syntax highlighting (Story 2.10)
+          if [ $GZIP_SIZE -gt 716800 ]; then
+            echo "ERROR: Gzipped WASM size exceeds 700KB limit"
             exit 1
           fi
 
