@@ -111,20 +111,16 @@
                     throw new Error('Qt WASM module did not export factory function');
                 }
 
-                // Create canvas for Qt to render into
-                const canvas = document.createElement('canvas');
-                canvas.id = 'qtcanvas';
-                canvas.style.width = '100%';
-                canvas.style.height = '100%';
-                document.getElementById('qt-container').appendChild(canvas);
+                // Get container element for Qt
+                const container = document.getElementById('qt-container');
+                container.innerHTML = ''; // Clear loading indicator
 
-                // Initialize Qt WASM with canvas
+                // Initialize Qt WASM with container elements (Qt 6 API)
                 const instance = await createQtAppInstance({
-                    canvas: canvas,
+                    qtContainerElements: [container],
                     arguments: [],
                 });
 
-                loadingEl.style.display = 'none';
                 console.log('[Airgap] Qt application started');
                 console.log('[Airgap] Zero network requests - all processing local');
 
