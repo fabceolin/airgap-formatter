@@ -10,8 +10,19 @@ using namespace emscripten;
 
 JsonBridge::JsonBridge(QObject *parent)
     : QObject(parent)
+    , m_treeModel(new QJsonTreeModel(this))
 {
     checkReady();
+}
+
+QJsonTreeModel* JsonBridge::treeModel() const
+{
+    return m_treeModel;
+}
+
+bool JsonBridge::loadTreeModel(const QString &json)
+{
+    return m_treeModel->loadJson(json);
 }
 
 void JsonBridge::checkReady()

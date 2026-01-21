@@ -12,9 +12,13 @@ Rectangle {
     signal minifyRequested()
     signal copyRequested()
     signal clearRequested()
+    signal viewModeToggled()
+    signal expandAllRequested()
+    signal collapseAllRequested()
 
     property string selectedIndent: "spaces:4"
     property alias copyButtonText: copyButton.text
+    property string viewMode: "tree"  // "tree" or "text"
 
     RowLayout {
         anchors.fill: parent
@@ -140,6 +144,105 @@ Rectangle {
         }
 
         Item { Layout.fillWidth: true }  // Spacer
+
+        // View mode toggle
+        Button {
+            id: viewToggleButton
+            text: toolbar.viewMode === "tree" ? "Tree" : "Text"
+            onClicked: toolbar.viewModeToggled()
+
+            contentItem: Text {
+                text: viewToggleButton.text
+                color: Theme.textPrimary
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                font.pixelSize: 13
+            }
+            background: Rectangle {
+                implicitWidth: 70
+                implicitHeight: 34
+                color: viewToggleButton.pressed ? Theme.accent : Theme.backgroundSecondary
+                border.color: viewToggleButton.activeFocus ? Theme.focusRing : Theme.border
+                border.width: viewToggleButton.activeFocus ? Theme.focusRingWidth : 1
+                radius: 4
+            }
+
+            ToolTip.visible: hovered
+            ToolTip.text: toolbar.viewMode === "tree" ? "Switch to Text View (Ctrl+T)" : "Switch to Tree View (Ctrl+T)"
+            ToolTip.delay: 500
+        }
+
+        Rectangle {
+            width: 1
+            height: 30
+            color: Theme.border
+        }
+
+        // Expand All button (only enabled in tree mode)
+        Button {
+            id: expandAllButton
+            text: "[+]"
+            enabled: toolbar.viewMode === "tree"
+            opacity: enabled ? 1.0 : 0.5
+            onClicked: toolbar.expandAllRequested()
+
+            contentItem: Text {
+                text: expandAllButton.text
+                color: Theme.textPrimary
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                font.pixelSize: 13
+                font.family: Theme.monoFont
+            }
+            background: Rectangle {
+                implicitWidth: 40
+                implicitHeight: 34
+                color: expandAllButton.pressed ? Theme.accent : Theme.backgroundSecondary
+                border.color: expandAllButton.activeFocus ? Theme.focusRing : Theme.border
+                border.width: expandAllButton.activeFocus ? Theme.focusRingWidth : 1
+                radius: 4
+            }
+
+            ToolTip.visible: hovered
+            ToolTip.text: "Expand All (Ctrl+E)"
+            ToolTip.delay: 500
+        }
+
+        // Collapse All button (only enabled in tree mode)
+        Button {
+            id: collapseAllButton
+            text: "[-]"
+            enabled: toolbar.viewMode === "tree"
+            opacity: enabled ? 1.0 : 0.5
+            onClicked: toolbar.collapseAllRequested()
+
+            contentItem: Text {
+                text: collapseAllButton.text
+                color: Theme.textPrimary
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                font.pixelSize: 13
+                font.family: Theme.monoFont
+            }
+            background: Rectangle {
+                implicitWidth: 40
+                implicitHeight: 34
+                color: collapseAllButton.pressed ? Theme.accent : Theme.backgroundSecondary
+                border.color: collapseAllButton.activeFocus ? Theme.focusRing : Theme.border
+                border.width: collapseAllButton.activeFocus ? Theme.focusRingWidth : 1
+                radius: 4
+            }
+
+            ToolTip.visible: hovered
+            ToolTip.text: "Collapse All (Ctrl+Shift+E)"
+            ToolTip.delay: 500
+        }
+
+        Rectangle {
+            width: 1
+            height: 30
+            color: Theme.border
+        }
 
         Button {
             id: copyButton

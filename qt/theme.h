@@ -33,6 +33,15 @@ class Theme : public QObject
     Q_PROPERTY(QString monoFont READ monoFont CONSTANT)
     Q_PROPERTY(int monoFontSize READ monoFontSize CONSTANT)
 
+    // Syntax highlighting colors (base16-ocean.dark theme)
+    Q_PROPERTY(QColor syntaxKey READ syntaxKey CONSTANT)
+    Q_PROPERTY(QColor syntaxString READ syntaxString CONSTANT)
+    Q_PROPERTY(QColor syntaxNumber READ syntaxNumber CONSTANT)
+    Q_PROPERTY(QColor syntaxBoolean READ syntaxBoolean CONSTANT)
+    Q_PROPERTY(QColor syntaxNull READ syntaxNull CONSTANT)
+    Q_PROPERTY(QColor syntaxPunctuation READ syntaxPunctuation CONSTANT)
+    Q_PROPERTY(QColor syntaxBadge READ syntaxBadge CONSTANT)
+
 public:
     explicit Theme(QObject *parent = nullptr) : QObject(parent) {}
 
@@ -59,6 +68,15 @@ public:
     // Typography
     QString monoFont() const { return QStringLiteral("Consolas, Monaco, 'Courier New', monospace"); }
     int monoFontSize() const { return 14; }
+
+    // Syntax highlighting colors (base16-ocean.dark theme)
+    QColor syntaxKey() const { return QColor("#8fa1b3"); }         // Light blue
+    QColor syntaxString() const { return QColor("#a3be8c"); }      // Green
+    QColor syntaxNumber() const { return QColor("#d08770"); }      // Orange
+    QColor syntaxBoolean() const { return QColor("#b48ead"); }     // Purple
+    QColor syntaxNull() const { return QColor("#bf616a"); }        // Red
+    QColor syntaxPunctuation() const { return QColor("#c0c5ce"); } // Light gray
+    QColor syntaxBadge() const { return QColor("#65737e"); }       // Muted for count badges
 };
 
 #endif // THEME_H

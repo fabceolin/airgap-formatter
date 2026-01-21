@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QVariantMap>
+#include "qjsontreemodel.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -14,11 +15,13 @@ class JsonBridge : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool ready READ isReady NOTIFY readyChanged)
+    Q_PROPERTY(QJsonTreeModel* treeModel READ treeModel CONSTANT)
 
 public:
     explicit JsonBridge(QObject *parent = nullptr);
 
     bool isReady() const;
+    QJsonTreeModel* treeModel() const;
 
     Q_INVOKABLE QVariantMap formatJson(const QString &input, const QString &indentType);
     Q_INVOKABLE QVariantMap minifyJson(const QString &input);
@@ -26,12 +29,14 @@ public:
     Q_INVOKABLE QString highlightJson(const QString &input);
     Q_INVOKABLE void copyToClipboard(const QString &text);
     Q_INVOKABLE QString readFromClipboard();
+    Q_INVOKABLE bool loadTreeModel(const QString &json);
 
 signals:
     void readyChanged();
 
 private:
     bool m_ready = false;
+    QJsonTreeModel* m_treeModel;
     void checkReady();
 };
 

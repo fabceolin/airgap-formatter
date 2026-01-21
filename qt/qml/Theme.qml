@@ -25,12 +25,12 @@ QtObject {
     readonly property string monoFont: "Consolas, Monaco, 'Courier New', monospace"
     readonly property int monoFontSize: 14
 
-    // Syntax highlighting colors (reference only - provided by Rust syntect via inline HTML styles)
-    // Theme: base16-ocean.dark
-    // Keys:        #8fa1b3 (light blue)
-    // Strings:     #a3be8c (green)
-    // Numbers:     #d08770 (orange)
-    // Booleans:    #b48ead (purple)
-    // Null:        #bf616a (red)
-    // Punctuation: #c0c5ce (light gray)
+    // Syntax highlighting colors (base16-ocean.dark theme)
+    readonly property color syntaxKey: "#8fa1b3"         // Light blue
+    readonly property color syntaxString: "#a3be8c"      // Green
+    readonly property color syntaxNumber: "#d08770"      // Orange
+    readonly property color syntaxBoolean: "#b48ead"     // Purple
+    readonly property color syntaxNull: "#bf616a"        // Red
+    readonly property color syntaxPunctuation: "#c0c5ce" // Light gray
+    readonly property color syntaxBadge: "#65737e"       // Muted for count badges
 }

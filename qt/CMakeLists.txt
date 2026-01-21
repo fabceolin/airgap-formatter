@@ -11,6 +11,10 @@ qt_add_executable(airgap_formatter
     main.cpp
     jsonbridge.cpp
     jsonbridge.h
+    qjsontreeitem.cpp
+    qjsontreeitem.h
+    qjsontreemodel.cpp
+    qjsontreemodel.h
     theme.cpp
     theme.h
 )
@@ -24,6 +28,7 @@ qt_add_qml_module(airgap_formatter
         qml/Toolbar.qml
         qml/InputPane.qml
         qml/OutputPane.qml
+        qml/JsonTreeView.qml
         qml/StatusBar.qml
 )
 

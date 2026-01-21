@@ -17,6 +17,12 @@ ApplicationWindow {
     // Track WASM initialization state
     property bool wasmInitialized: false
 
+    // View mode: "tree" or "text"
+    property string viewMode: "tree"
+
+    // Store current formatted JSON for both views
+    property string currentFormattedJson: ""
+
     // Track when JsonBridge becomes ready
     Connections {
         target: JsonBridge
@@ -98,6 +104,23 @@ ApplicationWindow {
         Toolbar {
             id: toolbar
             Layout.fillWidth: true
+            viewMode: window.viewMode
+
+            onViewModeToggled: {
+                window.viewMode = (window.viewMode === "tree") ? "text" : "tree"
+            }
+
+            onExpandAllRequested: {
+                if (window.viewMode === "tree") {
+                    jsonTreeView.expandAll()
+                }
+            }
+
+            onCollapseAllRequested: {
+                if (window.viewMode === "tree") {
+                    jsonTreeView.collapseAll()
+                }
+            }
 
             onFormatRequested: (indentType) => {
                 if (!inputPane.text.trim()) {
@@ -105,10 +128,14 @@ ApplicationWindow {
                 }
                 const result = JsonBridge.formatJson(inputPane.text, indentType);
                 if (result.success) {
+                    currentFormattedJson = result.result;
                     outputPane.text = result.result;
+                    // Load tree model for tree view
+                    JsonBridge.loadTreeModel(result.result);
                     // Re-validate after formatting
                     validateInput();
                 } else {
+                    currentFormattedJson = "";
                     outputPane.text = "Error: " + result.error;
                 }
             }
@@ -119,17 +146,21 @@ ApplicationWindow {
                 }
                 const result = JsonBridge.minifyJson(inputPane.text);
                 if (result.success) {
+                    currentFormattedJson = result.result;
                     outputPane.text = result.result;
+                    // Load tree model for tree view
+                    JsonBridge.loadTreeModel(result.result);
                     // Re-validate after minifying
                     validateInput();
                 } else {
+                    currentFormattedJson = "";
                     outputPane.text = "Error: " + result.error;
                 }
             }
 
             onCopyRequested: {
-                if (outputPane.text) {
-                    JsonBridge.copyToClipboard(outputPane.text);
+                if (currentFormattedJson) {
+                    JsonBridge.copyToClipboard(currentFormattedJson);
                     toolbar.copyButtonText = "Copied!";
                     copyFeedbackTimer.restart();
                 }
@@ -138,6 +169,9 @@ ApplicationWindow {
             onClearRequested: {
                 inputPane.text = "";
                 outputPane.text = "";
+                currentFormattedJson = "";
+                // Clear tree model
+                JsonBridge.treeModel.clear();
                 // Reset validation state
                 statusBar.isValid = true;
                 statusBar.errorMessage = "";
@@ -174,12 +208,26 @@ ApplicationWindow {
                 }
             }
 
-            OutputPane {
-                id: outputPane
+            // Output area - switches between TreeView and TextArea
+            Item {
+                id: outputArea
                 SplitView.fillWidth: true
                 SplitView.fillHeight: true
                 SplitView.minimumWidth: 300
                 SplitView.minimumHeight: 200
+
+                OutputPane {
+                    id: outputPane
+                    anchors.fill: parent
+                    visible: viewMode === "text"
+                }
+
+                JsonTreeView {
+                    id: jsonTreeView
+                    anchors.fill: parent
+                    visible: viewMode === "tree"
+                    model: JsonBridge.treeModel
+                }
             }
         }
 
@@ -224,5 +272,24 @@ ApplicationWindow {
                 inputPane.text = text;
             }
         }
+    }
+
+    // TreeView expand/collapse shortcuts
+    Shortcut {
+        sequence: "Ctrl+E"
+        enabled: viewMode === "tree"
+        onActivated: jsonTreeView.expandAll()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Shift+E"
+        enabled: viewMode === "tree"
+        onActivated: jsonTreeView.collapseAll()
+    }
+
+    // Toggle view mode
+    Shortcut {
+        sequence: "Ctrl+T"
+        onActivated: viewMode = (viewMode === "tree") ? "text" : "tree"
     }
 }
