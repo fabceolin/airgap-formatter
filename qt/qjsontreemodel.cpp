@@ -209,3 +209,23 @@ QString QJsonTreeModel::getJsonPath(const QModelIndex& index) const
 
     return item->jsonPath();
 }
+
+int QJsonTreeModel::totalNodeCount() const
+{
+    if (!m_rootItem)
+        return 0;
+
+    return countNodes(m_rootItem);
+}
+
+int QJsonTreeModel::countNodes(QJsonTreeItem* item) const
+{
+    if (!item)
+        return 0;
+
+    int count = 1;  // Count this node
+    for (int i = 0; i < item->childCount(); ++i) {
+        count += countNodes(item->child(i));
+    }
+    return count;
+}

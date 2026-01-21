@@ -41,10 +41,15 @@ public:
     Q_INVOKABLE QString serializeNode(const QModelIndex& index) const;
     Q_INVOKABLE QString getJsonPath(const QModelIndex& index) const;
 
+    // Node counting for performance guard
+    Q_INVOKABLE int totalNodeCount() const;
+
 signals:
     void loadError(const QString& error);
 
 private:
+    int countNodes(QJsonTreeItem* item) const;
+
     QJsonTreeItem* m_rootItem;
 };
 

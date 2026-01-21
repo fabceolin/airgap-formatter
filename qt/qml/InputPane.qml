@@ -9,6 +9,11 @@ Rectangle {
     property int errorLine: -1  // -1 = no error
     property string errorMessage: ""
 
+    // Check if all text is selected (for auto-format on paste logic)
+    function isFullySelected() {
+        return textArea.selectedText === textArea.text && textArea.text.length > 0
+    }
+
     color: Theme.backgroundSecondary
     border.color: Theme.border
     border.width: 1

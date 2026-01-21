@@ -8,6 +8,11 @@ Rectangle {
     property alias model: treeView.model
     property int animationDuration: 150
 
+    // Auto-expand configuration
+    property bool autoExpandOnLoad: true
+    property int maxAutoExpandNodes: 1000
+    property int defaultExpandDepth: 3
+
     color: Theme.backgroundSecondary
     border.color: Theme.border
     border.width: 1
@@ -20,6 +25,39 @@ Rectangle {
 
     function collapseAll() {
         treeView.collapseRecursively()
+    }
+
+    function expandToLevel(maxDepth) {
+        // Use TreeView's built-in expandRecursively with depth limit
+        for (let row = 0; row < treeView.rows; row++) {
+            treeView.expandRecursively(row, maxDepth)
+        }
+    }
+
+    function performAutoExpand() {
+        if (!autoExpandOnLoad) return
+        if (!treeView.model) return
+
+        const nodeCount = treeView.model.totalNodeCount()
+        if (nodeCount <= 0) return
+
+        Qt.callLater(function() {
+            if (nodeCount <= maxAutoExpandNodes) {
+                expandAll()
+            } else {
+                expandToLevel(defaultExpandDepth)
+            }
+        })
+    }
+
+    // Listen for model data reset to trigger auto-expand
+    Connections {
+        target: treeView.model
+        function onModelReset() {
+            if (root.autoExpandOnLoad) {
+                root.performAutoExpand()
+            }
+        }
     }
 
     ScrollView {
@@ -236,7 +274,7 @@ Rectangle {
                         width: 22
                         height: 22
                         radius: 3
-                        color: copyValueMouse.containsMouse ? Theme.backgroundTertiary : "transparent"
+                        color: copyValueHover.hovered ? Theme.backgroundTertiary : "transparent"
 
                         Text {
                             anchors.centerIn: parent
@@ -245,16 +283,17 @@ Rectangle {
                             color: Theme.textSecondary
                         }
 
-                        MouseArea {
-                            id: copyValueMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
+                        HoverHandler {
+                            id: copyValueHover
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.copyValue(delegateRoot.row)
+                        }
+
+                        TapHandler {
+                            onTapped: root.copyValue(delegateRoot.row)
                         }
 
                         ToolTip {
-                            visible: copyValueMouse.containsMouse
+                            visible: copyValueHover.hovered
                             text: "Copy Value"
                             delay: 500
                         }
@@ -265,7 +304,7 @@ Rectangle {
                         width: 22
                         height: 22
                         radius: 3
-                        color: copyPathMouse.containsMouse ? Theme.backgroundTertiary : "transparent"
+                        color: copyPathHover.hovered ? Theme.backgroundTertiary : "transparent"
 
                         Text {
                             anchors.centerIn: parent
@@ -274,16 +313,17 @@ Rectangle {
                             color: Theme.textSecondary
                         }
 
-                        MouseArea {
-                            id: copyPathMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
+                        HoverHandler {
+                            id: copyPathHover
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.copyPath(delegateRoot.jsonPath)
+                        }
+
+                        TapHandler {
+                            onTapped: root.copyPath(delegateRoot.jsonPath)
                         }
 
                         ToolTip {
-                            visible: copyPathMouse.containsMouse
+                            visible: copyPathHover.hovered
                             text: "Copy Path"
                             delay: 500
                         }

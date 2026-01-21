@@ -263,13 +263,33 @@ ApplicationWindow {
         }
     }
 
-    // Ctrl+V paste (Qt WASM doesn't handle browser paste events well)
+    // Ctrl+V paste with auto-format (Qt WASM doesn't handle browser paste events well)
     Shortcut {
         sequences: [StandardKey.Paste]
         onActivated: {
             const text = JsonBridge.readFromClipboard();
             if (text) {
-                inputPane.text = text;
+                // Check if we should auto-format: input is empty or fully selected
+                const shouldAutoFormat = inputPane.text.trim() === "" ||
+                                         inputPane.isFullySelected();
+
+                if (shouldAutoFormat) {
+                    // Try to format the pasted content
+                    const result = JsonBridge.formatJson(text, toolbar.selectedIndent);
+                    if (result.success) {
+                        inputPane.text = text;  // Put original in input
+                        currentFormattedJson = result.result;
+                        outputPane.text = result.result;
+                        JsonBridge.loadTreeModel(result.result);
+                        validateInput();
+                    } else {
+                        // Invalid JSON - just paste without formatting
+                        inputPane.text = text;
+                    }
+                } else {
+                    // Has partial content - paste normally without auto-format
+                    inputPane.text = text;
+                }
             }
         }
     }
