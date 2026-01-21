@@ -43,7 +43,7 @@ Rectangle {
             delegate: Item {
                 id: delegateRoot
                 implicitWidth: treeView.width
-                implicitHeight: Math.max(contentRow.height, 24)
+                implicitHeight: Math.max(contentRow.height, 24) + (showClosingBracket ? 22 : 0)
 
                 required property TreeView treeView
                 required property bool isTreeNode
@@ -62,9 +62,14 @@ Rectangle {
                 required property string jsonPath
                 required property int childCount
                 required property bool isExpandable
+                required property bool isLastChild
+                required property string parentValueType
 
                 property bool hovered: mouseArea.containsMouse
                 property int indent: depth * 20
+                // Show closing bracket when this is the last child of an expanded object/array
+                property bool showClosingBracket: delegateRoot.isLastChild &&
+                    (delegateRoot.parentValueType === "object" || delegateRoot.parentValueType === "array")
 
                 Rectangle {
                     anchors.fill: parent
@@ -196,15 +201,20 @@ Rectangle {
                         anchors.verticalCenter: parent.verticalCenter
                     }
 
-                    // Closing bracket for expanded containers
-                    Text {
-                        visible: delegateRoot.expanded && delegateRoot.childCount === 0
-                        text: delegateRoot.valueType === "object" ? "}" : "]"
-                        color: Theme.syntaxPunctuation
-                        font.family: Theme.monoFont
-                        font.pixelSize: Theme.monoFontSize
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
+                }
+
+                // Closing bracket for parent container (rendered after last child)
+                Text {
+                    id: closingBracket
+                    visible: delegateRoot.showClosingBracket
+                    anchors.top: contentRow.bottom
+                    anchors.topMargin: 2
+                    // Parent's indentation: (depth - 1) * 20 + 4 (margin) + 16 (expand icon space)
+                    x: (delegateRoot.depth - 1) * 20 + 20
+                    text: delegateRoot.parentValueType === "object" ? "}" : "]"
+                    color: Theme.syntaxPunctuation
+                    font.family: Theme.monoFont
+                    font.pixelSize: Theme.monoFontSize
                 }
 
                 // Copy icons on hover
@@ -285,7 +295,9 @@ Rectangle {
             Component {
                 id: objectComponent
                 Text {
-                    text: "{"
+                    // Show {} for empty objects, { for non-empty
+                    property int delegateChildCount: parent ? parent.parent.parent.childCount : 0
+                    text: delegateChildCount === 0 ? "{}" : "{"
                     color: Theme.syntaxPunctuation
                     font.family: Theme.monoFont
                     font.pixelSize: Theme.monoFontSize
@@ -295,7 +307,9 @@ Rectangle {
             Component {
                 id: arrayComponent
                 Text {
-                    text: "["
+                    // Show [] for empty arrays, [ for non-empty
+                    property int delegateChildCount: parent ? parent.parent.parent.childCount : 0
+                    text: delegateChildCount === 0 ? "[]" : "["
                     color: Theme.syntaxPunctuation
                     font.family: Theme.monoFont
                     font.pixelSize: Theme.monoFontSize

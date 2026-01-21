@@ -16,7 +16,9 @@ public:
         ValueTypeRole,
         JsonPathRole,
         ChildCountRole,
-        IsExpandableRole
+        IsExpandableRole,
+        IsLastChildRole,
+        ParentValueTypeRole
     };
     Q_ENUM(Roles)
 

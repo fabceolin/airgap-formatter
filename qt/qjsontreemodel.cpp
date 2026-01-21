@@ -100,6 +100,18 @@ QVariant QJsonTreeModel::data(const QModelIndex& index, int role) const
             return item->childCount();
         case IsExpandableRole:
             return item->isExpandable();
+        case IsLastChildRole: {
+            QJsonTreeItem* parent = item->parentItem();
+            if (!parent)
+                return false;
+            return (parent->childCount() - 1) == index.row();
+        }
+        case ParentValueTypeRole: {
+            QJsonTreeItem* parent = item->parentItem();
+            if (!parent)
+                return QString();
+            return parent->typeName();
+        }
         case Qt::DisplayRole:
             // For display, combine key and value
             if (item->key().isEmpty()) {
@@ -119,7 +131,9 @@ QHash<int, QByteArray> QJsonTreeModel::roleNames() const
         {ValueTypeRole, "valueType"},
         {JsonPathRole, "jsonPath"},
         {ChildCountRole, "childCount"},
-        {IsExpandableRole, "isExpandable"}
+        {IsExpandableRole, "isExpandable"},
+        {IsLastChildRole, "isLastChild"},
+        {ParentValueTypeRole, "parentValueType"}
     };
 }
 
