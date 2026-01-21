@@ -141,6 +141,7 @@ jobs:
           # Copy all public assets to dist
           cp public/index.html dist/
           cp public/bridge.js dist/
+          cp public/history-storage.js dist/
           cp public/sw.js dist/
           cp public/manifest.json dist/
           cp public/404.html dist/
