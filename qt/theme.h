@@ -4,10 +4,15 @@
 #include <QObject>
 #include <QColor>
 #include <QString>
+#include <QtQml/qqmlregistration.h>
+#include <QQmlEngine>
+#include <QJSEngine>
 
 class Theme : public QObject
 {
     Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
 
     // Theme mode
     Q_PROPERTY(bool darkMode READ darkMode WRITE setDarkMode NOTIFY darkModeChanged)
@@ -39,6 +44,12 @@ class Theme : public QObject
     Q_PROPERTY(QString monoFont READ monoFont CONSTANT)
     Q_PROPERTY(int monoFontSize READ monoFontSize CONSTANT)
 
+    // Badge colors
+    Q_PROPERTY(QColor badgeSuccessBg READ badgeSuccessBg NOTIFY themeChanged)
+    Q_PROPERTY(QColor badgeSuccessBorder READ badgeSuccessBorder NOTIFY themeChanged)
+    Q_PROPERTY(QColor badgeErrorBg READ badgeErrorBg NOTIFY themeChanged)
+    Q_PROPERTY(QColor badgeErrorBorder READ badgeErrorBorder NOTIFY themeChanged)
+
     // Syntax highlighting colors
     Q_PROPERTY(QColor syntaxKey READ syntaxKey NOTIFY themeChanged)
     Q_PROPERTY(QColor syntaxString READ syntaxString NOTIFY themeChanged)
@@ -50,6 +61,15 @@ class Theme : public QObject
 
 public:
     explicit Theme(QObject *parent = nullptr);
+
+    // Factory method for QML singleton
+    static Theme* create(QQmlEngine *qmlEngine, QJSEngine *jsEngine)
+    {
+        Q_UNUSED(qmlEngine);
+        Q_UNUSED(jsEngine);
+        static Theme* instance = new Theme();
+        return instance;
+    }
 
     // Theme mode
     bool darkMode() const { return m_darkMode; }
@@ -81,6 +101,12 @@ public:
     // Typography
     QString monoFont() const { return QStringLiteral("Consolas, Monaco, 'Courier New', monospace"); }
     int monoFontSize() const { return 14; }
+
+    // Badge colors
+    QColor badgeSuccessBg() const { return m_darkMode ? QColor("#1a3a1a") : QColor("#e6f4ea"); }
+    QColor badgeSuccessBorder() const { return m_darkMode ? QColor("#2d5a2d") : QColor("#34a853"); }
+    QColor badgeErrorBg() const { return m_darkMode ? QColor("#4a2d2d") : QColor("#fce8e6"); }
+    QColor badgeErrorBorder() const { return m_darkMode ? QColor("#5a3d3d") : QColor("#ea4335"); }
 
     // Syntax highlighting colors
     // Dark: base16-ocean.dark theme

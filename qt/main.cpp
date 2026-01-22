@@ -3,7 +3,6 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include "jsonbridge.h"
-#include "theme.h"
 
 int main(int argc, char *argv[])
 {
