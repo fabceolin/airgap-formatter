@@ -1,6 +1,9 @@
 import QtQuick
 
 QtObject {
+    // App version
+    readonly property string appVersion: "0.1.0"
+
     // Background colors
     readonly property color background: "#1e1e1e"
     readonly property color backgroundSecondary: "#252526"

@@ -32,6 +32,14 @@ Rectangle {
             font.weight: Font.Medium
         }
 
+        // Version badge
+        Text {
+            text: "v" + Theme.appVersion
+            color: Theme.textSecondary
+            font.pixelSize: 11
+            Layout.alignment: Qt.AlignVCenter
+        }
+
         Item { Layout.fillWidth: true }  // Spacer
 
         // Airgap Protected Badge

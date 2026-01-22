@@ -1,0 +1,24 @@
+# Build outputs
+target/
+dist/
+qt/build/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+
+# Logs
+*.log
+
+# Debug files
+debug-*.png
+debug-*.js
