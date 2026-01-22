@@ -4,7 +4,7 @@
 
 ## Live Demo
 
-**[Launch Airgap JSON Formatter](https://YOUR_USERNAME.github.io/airgap-json-formatter/)**
+**[Launch Airgap JSON Formatter](https://fabceolin.github.io/airgap-json-formatter/)**
 
 ### Quick Start
 1. Open the app in your browser

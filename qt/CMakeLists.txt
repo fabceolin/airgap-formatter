@@ -50,6 +50,7 @@ if(EMSCRIPTEN)
         -sEXPORT_NAME=createQtAppInstance
         -sENVIRONMENT=web
         -sASYNCIFY
+        -sASYNCIFY_STACK_SIZE=131072
         -sALLOW_MEMORY_GROWTH=1
         --bind
     )

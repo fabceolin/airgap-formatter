@@ -362,21 +362,21 @@ Rectangle {
             color: Theme.border
         }
 
-        // Copy Output button (icon only)
+        // Copy Output button
         Button {
             id: copyButton
             text: "Copy"
             onClicked: toolbar.copyRequested()
 
             contentItem: Text {
-                text: "⧉"
-                font.pixelSize: 16
+                text: copyButton.text
+                font.pixelSize: 13
                 color: Theme.textPrimary
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
             background: Rectangle {
-                implicitWidth: 38
+                implicitWidth: 60
                 implicitHeight: 34
                 color: copyButton.hovered ? Theme.backgroundSecondary : "transparent"
                 border.color: copyButton.hovered ? Theme.border : "transparent"

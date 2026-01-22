@@ -58,7 +58,37 @@ ApplicationWindow {
         onTriggered: jsonTreeView.expandAll()
     }
 
+    // Timer for deferred history save (to avoid ASYNCIFY conflicts)
+    Timer {
+        id: saveHistoryTimer
+        interval: 100
+        property string jsonToSave: ""
+        onTriggered: {
+            if (jsonToSave) {
+                JsonBridge.saveToHistory(jsonToSave);
+                jsonToSave = "";
+            }
+        }
+    }
+
+    // Timer for deferred format request (to avoid ASYNCIFY conflicts when loading from history)
+    Timer {
+        id: deferredFormatTimer
+        interval: 50
+        property string indentType: "spaces:4"
+        onTriggered: toolbar.formatRequested(indentType)
+    }
+
+    // Flag to skip validation during format (already validated by format)
+    property bool skipNextValidation: false
+
     function validateInput() {
+        // Skip validation if flag is set (to avoid ASYNCIFY conflicts)
+        if (skipNextValidation) {
+            skipNextValidation = false;
+            return;
+        }
+
         if (!inputPane.text || !inputPane.text.trim()) {
             statusBar.isValid = true;
             statusBar.errorMessage = "";
@@ -137,12 +167,19 @@ ApplicationWindow {
                 if (result.success) {
                     currentFormattedJson = result.result;
                     outputPane.text = result.result;
-                    // Load tree model for tree view
+                    // Load tree model for tree view (synchronous)
                     JsonBridge.loadTreeModel(result.result);
-                    // Re-validate after formatting
-                    validateInput();
-                    // Auto-save to history
-                    JsonBridge.saveToHistory(result.result);
+                    // Update status bar from format result (avoid extra async validateJson call)
+                    statusBar.isValid = true;
+                    statusBar.errorMessage = "";
+                    inputPane.errorLine = -1;
+                    inputPane.errorMessage = "";
+                    // Skip the next validation since we just formatted valid JSON
+                    skipNextValidation = true;
+                    validationTimer.stop();
+                    // Defer history save to avoid ASYNCIFY conflicts
+                    saveHistoryTimer.jsonToSave = result.result;
+                    saveHistoryTimer.restart();
                     // Auto-expand tree view after model loads
                     autoExpandTimer.restart();
                 } else {
@@ -159,12 +196,19 @@ ApplicationWindow {
                 if (result.success) {
                     currentFormattedJson = result.result;
                     outputPane.text = result.result;
-                    // Load tree model for tree view
+                    // Load tree model for tree view (synchronous)
                     JsonBridge.loadTreeModel(result.result);
-                    // Re-validate after minifying
-                    validateInput();
-                    // Auto-save to history
-                    JsonBridge.saveToHistory(result.result);
+                    // Update status bar (avoid extra async validateJson call)
+                    statusBar.isValid = true;
+                    statusBar.errorMessage = "";
+                    inputPane.errorLine = -1;
+                    inputPane.errorMessage = "";
+                    // Skip the next validation
+                    skipNextValidation = true;
+                    validationTimer.stop();
+                    // Defer history save to avoid ASYNCIFY conflicts
+                    saveHistoryTimer.jsonToSave = result.result;
+                    saveHistoryTimer.restart();
                     // Switch to text mode for minified output
                     window.viewMode = "text";
                 } else {
@@ -262,9 +306,14 @@ ApplicationWindow {
         parent: Overlay.overlay
 
         onEntrySelected: (content) => {
+            // Stop any pending validation to avoid ASYNCIFY conflicts
+            validationTimer.stop();
+            skipNextValidation = true;
             inputPane.text = content;
-            // Auto-format the loaded content
-            toolbar.formatRequested(toolbar.selectedIndent);
+            // Defer format to next event loop iteration to avoid ASYNCIFY conflicts
+            // (the drawer close animation triggers events that can interfere)
+            deferredFormatTimer.indentType = toolbar.selectedIndent;
+            deferredFormatTimer.restart();
         }
     }
 
@@ -312,9 +361,16 @@ ApplicationWindow {
                         currentFormattedJson = result.result;
                         outputPane.text = result.result;
                         JsonBridge.loadTreeModel(result.result);
-                        validateInput();
-                        // Auto-save to history
-                        JsonBridge.saveToHistory(result.result);
+                        // Update status bar (avoid extra async call)
+                        statusBar.isValid = true;
+                        statusBar.errorMessage = "";
+                        inputPane.errorLine = -1;
+                        inputPane.errorMessage = "";
+                        skipNextValidation = true;
+                        validationTimer.stop();
+                        // Defer history save to avoid ASYNCIFY conflicts
+                        saveHistoryTimer.jsonToSave = result.result;
+                        saveHistoryTimer.restart();
                         // Auto-expand tree view after model loads
                         autoExpandTimer.restart();
                     } else {

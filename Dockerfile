@@ -1,5 +1,5 @@
 # Dockerfile for Airgap JSON Formatter local development
-# Ubuntu 24.04 with Qt 6.8.0 WASM, Emscripten 3.1.56, and Rust
+# Ubuntu 24.04 with Qt 6.10.1 WASM, Emscripten 4.0.7, and Rust
 
 FROM ubuntu:24.04
 
@@ -7,8 +7,8 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Version configuration (matching GitHub Actions workflow)
-ENV QT_VERSION=6.8.0
-ENV EMSDK_VERSION=3.1.56
+ENV QT_VERSION=6.10.1
+ENV EMSDK_VERSION=4.0.7
 ENV RUST_VERSION=stable
 
 # Install system dependencies
