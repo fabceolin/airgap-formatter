@@ -166,6 +166,8 @@ jobs:
           cp public/sw.js dist/
           cp public/manifest.json dist/
           cp public/404.html dist/
+          cp public/icon-192.png dist/
+          cp public/icon-512.png dist/
 
       - name: List build artifacts
         run: |

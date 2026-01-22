@@ -55,3 +55,9 @@ if(EMSCRIPTEN)
         --bind
     )
 endif()
+
+# Copy PWA assets to build directory for deployment
+if(EMSCRIPTEN)
+    file(COPY ${CMAKE_SOURCE_DIR}/../public/icon-192.png DESTINATION ${CMAKE_BINARY_DIR})
+    file(COPY ${CMAKE_SOURCE_DIR}/../public/icon-512.png DESTINATION ${CMAKE_BINARY_DIR})
+endif()
