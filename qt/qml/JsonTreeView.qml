@@ -81,7 +81,7 @@ Rectangle {
             delegate: Item {
                 id: delegateRoot
                 implicitWidth: treeView.width
-                implicitHeight: Math.max(contentRow.height, 24) + (showClosingBracket ? 22 : 0)
+                implicitHeight: Math.max(contentRow.height, 24)
 
                 required property TreeView treeView
                 required property bool isTreeNode
@@ -103,15 +103,12 @@ Rectangle {
                 required property bool isLastChild
                 required property string parentValueType
 
-                property bool hovered: mouseArea.containsMouse
+                property bool hovered: mouseArea.containsMouse || copyIconsArea.containsMouse
                 property int indent: depth * 20
-                // Show closing bracket when this is the last child of an expanded object/array
-                property bool showClosingBracket: delegateRoot.isLastChild &&
-                    (delegateRoot.parentValueType === "object" || delegateRoot.parentValueType === "array")
 
                 Rectangle {
                     anchors.fill: parent
-                    color: (delegateRoot.hovered || copyIcons.buttonsHovered) ? Qt.rgba(1, 1, 1, 0.05) : "transparent"
+                    color: delegateRoot.hovered ? Qt.rgba(1, 1, 1, 0.05) : "transparent"
                 }
 
                 MouseArea {
@@ -240,21 +237,6 @@ Rectangle {
                     }
 
                 }
-
-                // Closing bracket for parent container (rendered after last child)
-                Text {
-                    id: closingBracket
-                    visible: delegateRoot.showClosingBracket
-                    anchors.top: contentRow.bottom
-                    anchors.topMargin: 2
-                    // Parent's indentation: (depth - 1) * 20 + 4 (margin) + 16 (expand icon space)
-                    x: (delegateRoot.depth - 1) * 20 + 20
-                    text: delegateRoot.parentValueType === "object" ? "}" : "]"
-                    color: Theme.syntaxPunctuation
-                    font.family: Theme.monoFont
-                    font.pixelSize: Theme.monoFontSize
-                }
-
                 // Copy icons on hover
                 Row {
                     id: copyIcons
@@ -262,13 +244,19 @@ Rectangle {
                     anchors.rightMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 4
-                    // Keep visible if row is hovered OR if any button inside is hovered
-                    property bool buttonsHovered: copyValueHover.hovered || copyPathHover.hovered
-                    opacity: (delegateRoot.hovered || buttonsHovered) ? 1.0 : 0.0
+                    opacity: delegateRoot.hovered ? 1.0 : 0.0
                     visible: opacity > 0
 
                     Behavior on opacity {
                         NumberAnimation { duration: 150 }
+                    }
+
+                    // MouseArea to keep hover state when over buttons
+                    MouseArea {
+                        id: copyIconsArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
                     }
 
                     // Copy Value button
