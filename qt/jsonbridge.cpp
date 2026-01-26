@@ -316,17 +316,23 @@ void JsonBridge::formatJson(const QString &input, const QString &indentType)
                 std::string inputStd = input.toStdString();
                 std::string indentStd = indentType.toStdString();
 
-                val jsResult = jsonBridge.call<val>("formatJson", inputStd, indentStd);
+                // Call returns JSON string to avoid embind property access issues
+                std::string jsonResultStr = jsonBridge.call<std::string>("formatJson", inputStd, indentStd);
 
-                bool success = jsResult["success"].as<bool>();
-                result["success"] = success;
-
-                if (success) {
-                    std::string resultStr = jsResult["result"].as<std::string>();
-                    result["result"] = QString::fromStdString(resultStr);
+                // Parse the JSON response
+                QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(jsonResultStr).toUtf8());
+                if (doc.isNull() || !doc.isObject()) {
+                    result["error"] = "Failed to parse formatJson response";
                 } else {
-                    std::string errorStr = jsResult["error"].as<std::string>();
-                    result["error"] = QString::fromStdString(errorStr);
+                    QJsonObject obj = doc.object();
+                    bool success = obj["success"].toBool();
+                    result["success"] = success;
+
+                    if (success) {
+                        result["result"] = obj["result"].toString();
+                    } else {
+                        result["error"] = obj["error"].toString();
+                    }
                 }
             }
         } catch (const std::exception &e) {
@@ -376,17 +382,23 @@ void JsonBridge::minifyJson(const QString &input)
             } else {
                 std::string inputStd = input.toStdString();
 
-                val jsResult = jsonBridge.call<val>("minifyJson", inputStd);
+                // Call returns JSON string to avoid embind property access issues
+                std::string jsonResultStr = jsonBridge.call<std::string>("minifyJson", inputStd);
 
-                bool success = jsResult["success"].as<bool>();
-                result["success"] = success;
-
-                if (success) {
-                    std::string resultStr = jsResult["result"].as<std::string>();
-                    result["result"] = QString::fromStdString(resultStr);
+                // Parse the JSON response
+                QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(jsonResultStr).toUtf8());
+                if (doc.isNull() || !doc.isObject()) {
+                    result["error"] = "Failed to parse minifyJson response";
                 } else {
-                    std::string errorStr = jsResult["error"].as<std::string>();
-                    result["error"] = QString::fromStdString(errorStr);
+                    QJsonObject obj = doc.object();
+                    bool success = obj["success"].toBool();
+                    result["success"] = success;
+
+                    if (success) {
+                        result["result"] = obj["result"].toString();
+                    } else {
+                        result["error"] = obj["error"].toString();
+                    }
                 }
             }
         } catch (const std::exception &e) {
@@ -441,33 +453,44 @@ void JsonBridge::validateJson(const QString &input)
             } else {
                 std::string inputStd = input.toStdString();
 
-                val jsResult = jsonBridge.call<val>("validateJson", inputStd);
+                // Call returns JSON string to avoid embind property access issues
+                std::string jsonResultStr = jsonBridge.call<std::string>("validateJson", inputStd);
 
-                bool isValid = jsResult["isValid"].as<bool>();
-                result["isValid"] = isValid;
-
-                if (isValid) {
-                    QVariantMap stats;
-                    val jsStats = jsResult["stats"];
-                    if (!jsStats.isUndefined()) {
-                        stats["object_count"] = jsStats["object_count"].isUndefined() ? 0 : jsStats["object_count"].as<int>();
-                        stats["array_count"] = jsStats["array_count"].isUndefined() ? 0 : jsStats["array_count"].as<int>();
-                        stats["string_count"] = jsStats["string_count"].isUndefined() ? 0 : jsStats["string_count"].as<int>();
-                        stats["number_count"] = jsStats["number_count"].isUndefined() ? 0 : jsStats["number_count"].as<int>();
-                        stats["boolean_count"] = jsStats["boolean_count"].isUndefined() ? 0 : jsStats["boolean_count"].as<int>();
-                        stats["null_count"] = jsStats["null_count"].isUndefined() ? 0 : jsStats["null_count"].as<int>();
-                        stats["total_keys"] = jsStats["total_keys"].isUndefined() ? 0 : jsStats["total_keys"].as<int>();
-                        stats["max_depth"] = jsStats["max_depth"].isUndefined() ? 0 : jsStats["max_depth"].as<int>();
-                    }
-                    result["stats"] = stats;
-                } else {
-                    val jsError = jsResult["error"];
+                // Parse the JSON response
+                QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(jsonResultStr).toUtf8());
+                if (doc.isNull() || !doc.isObject()) {
                     QVariantMap error;
-                    error["message"] = jsError["message"].isUndefined() ? QString("Unknown error") : QString::fromStdString(jsError["message"].as<std::string>());
-                    error["line"] = jsError["line"].isUndefined() ? 0 : jsError["line"].as<int>();
-                    error["column"] = jsError["column"].isUndefined() ? 0 : jsError["column"].as<int>();
+                    error["message"] = "Failed to parse validateJson response";
+                    error["line"] = 0;
+                    error["column"] = 0;
                     result["error"] = error;
                     result["stats"] = QVariantMap();
+                } else {
+                    QJsonObject obj = doc.object();
+                    bool isValid = obj["isValid"].toBool();
+                    result["isValid"] = isValid;
+
+                    if (isValid) {
+                        QVariantMap stats;
+                        QJsonObject jsStats = obj["stats"].toObject();
+                        stats["object_count"] = jsStats["objectCount"].toInt(0);
+                        stats["array_count"] = jsStats["arrayCount"].toInt(0);
+                        stats["string_count"] = jsStats["stringCount"].toInt(0);
+                        stats["number_count"] = jsStats["numberCount"].toInt(0);
+                        stats["boolean_count"] = jsStats["booleanCount"].toInt(0);
+                        stats["null_count"] = jsStats["nullCount"].toInt(0);
+                        stats["total_keys"] = jsStats["totalKeys"].toInt(0);
+                        stats["max_depth"] = jsStats["maxDepth"].toInt(0);
+                        result["stats"] = stats;
+                    } else {
+                        QJsonObject jsError = obj["error"].toObject();
+                        QVariantMap error;
+                        error["message"] = jsError["message"].toString("Unknown error");
+                        error["line"] = jsError["line"].toInt(0);
+                        error["column"] = jsError["column"].toInt(0);
+                        result["error"] = error;
+                        result["stats"] = QVariantMap();
+                    }
                 }
             }
         } catch (const std::exception &e) {

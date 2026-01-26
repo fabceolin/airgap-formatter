@@ -50,59 +50,59 @@ const JsonBridge = {
      * Format JSON with specified indentation
      * @param {string} input - JSON string to format
      * @param {string} indentType - "spaces:2", "spaces:4", or "tabs"
-     * @returns {{success: boolean, result?: string, error?: string}}
+     * @returns {string} JSON string with {success: boolean, result?: string, error?: string}
      */
     formatJson(input, indentType) {
         if (!isInitialized) {
-            return { success: false, error: 'WASM not initialized' };
+            return JSON.stringify({ success: false, error: 'WASM not initialized' });
         }
         try {
             const result = wasmModule.formatJson(input, indentType);
-            return { success: true, result };
+            return JSON.stringify({ success: true, result });
         } catch (e) {
-            return { success: false, error: String(e) };
+            return JSON.stringify({ success: false, error: String(e) });
         }
     },
 
     /**
      * Minify JSON by removing whitespace
      * @param {string} input - JSON string to minify
-     * @returns {{success: boolean, result?: string, error?: string}}
+     * @returns {string} JSON string with {success: boolean, result?: string, error?: string}
      */
     minifyJson(input) {
         if (!isInitialized) {
-            return { success: false, error: 'WASM not initialized' };
+            return JSON.stringify({ success: false, error: 'WASM not initialized' });
         }
         try {
             const result = wasmModule.minifyJson(input);
-            return { success: true, result };
+            return JSON.stringify({ success: true, result });
         } catch (e) {
-            return { success: false, error: String(e) };
+            return JSON.stringify({ success: false, error: String(e) });
         }
     },
 
     /**
      * Validate JSON and return statistics
      * @param {string} input - JSON string to validate
-     * @returns {{isValid: boolean, error?: {message: string, line: number, column: number}, stats: object}}
+     * @returns {string} JSON string with validation result
      */
     validateJson(input) {
         if (!isInitialized) {
-            return {
+            return JSON.stringify({
                 isValid: false,
                 error: { message: 'WASM not initialized', line: 0, column: 0 },
                 stats: {}
-            };
+            });
         }
         try {
-            const resultJson = wasmModule.validateJson(input);
-            return JSON.parse(resultJson);
+            // wasmModule.validateJson already returns a JSON string
+            return wasmModule.validateJson(input);
         } catch (e) {
-            return {
+            return JSON.stringify({
                 isValid: false,
                 error: { message: String(e), line: 0, column: 0 },
                 stats: {}
-            };
+            });
         }
     },
 

@@ -6,6 +6,8 @@
 #include <QDebug>
 
 #ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#include <emscripten/eventloop.h>
 #include <emscripten/val.h>
 using emscripten::val;
 #endif

@@ -117,6 +117,8 @@ cp public/jspi-detect.js dist/\n\
 cp public/sw.js dist/\n\
 cp public/manifest.json dist/\n\
 cp public/404.html dist/\n\
+cp public/icon-192.png dist/\n\
+cp public/icon-512.png dist/\n\
 \n\
 echo "=== Build complete! ==="\n\
 echo "Output in ./dist/"\n\
