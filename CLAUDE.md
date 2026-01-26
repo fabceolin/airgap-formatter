@@ -28,3 +28,38 @@ cargo run --release
 - Zero external API calls after WASM binary loads
 - All data processing must remain client-side (privacy requirement)
 - Must handle sensitive JSON payloads (API keys, PII, credentials) without any data leaving the device
+
+## AsyncSerialiser Usage
+
+The `AsyncSerialiser` class serializes async operations to prevent concurrent Asyncify suspensions in WASM:
+
+```cpp
+#include "asyncserialiser.h"
+
+// Enqueue an async task
+AsyncSerialiser::instance().enqueue("taskName", []() {
+    QPromise<QVariant> promise;
+    auto future = promise.future();
+    promise.start();
+
+    // Perform async work (e.g., val::await)
+    // ...
+
+    promise.addResult(QVariant::fromValue(result));
+    promise.finish();
+    return future;
+});
+
+// Connect to signals for task lifecycle
+connect(&AsyncSerialiser::instance(), &AsyncSerialiser::taskCompleted,
+        this, [](const QString& name, bool success) {
+    // Handle completion
+});
+```
+
+Key features:
+- **Single-flight execution**: Only one task runs at a time (m_isBusy guard)
+- **FIFO ordering**: Tasks execute in enqueue order
+- **Watchdog timer**: 30-second timeout prevents hung tasks from blocking the queue (uses emscripten_set_timeout fallback in WASM for reliability)
+- **Error isolation**: Exceptions in one task don't block subsequent tasks
+- **Queue bounds**: Maximum 100 tasks (emits `taskRejected` if exceeded), warning at >10 tasks (`queueLengthWarning` signal)

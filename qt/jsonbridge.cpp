@@ -1,4 +1,5 @@
 #include "jsonbridge.h"
+#include "asyncserialiser.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -10,6 +11,7 @@
 #include <QFile>
 #include <QDateTime>
 #include <QUuid>
+#include <QPromise>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/val.h>
@@ -235,6 +237,29 @@ JsonBridge::JsonBridge(QObject *parent)
     , m_treeModel(new QJsonTreeModel(this))
 {
     checkReady();
+    connectAsyncSerialiserSignals();
+}
+
+void JsonBridge::connectAsyncSerialiserSignals()
+{
+    // Connect to AsyncSerialiser to emit busyChanged when queue changes
+    connect(&AsyncSerialiser::instance(), &AsyncSerialiser::queueLengthChanged,
+            this, [this]() {
+        emit busyChanged(isBusy());
+    });
+    connect(&AsyncSerialiser::instance(), &AsyncSerialiser::taskStarted,
+            this, [this](const QString&) {
+        emit busyChanged(isBusy());
+    });
+    connect(&AsyncSerialiser::instance(), &AsyncSerialiser::taskCompleted,
+            this, [this](const QString&, bool) {
+        emit busyChanged(isBusy());
+    });
+}
+
+bool JsonBridge::isBusy() const
+{
+    return AsyncSerialiser::instance().queueLength() > 0;
 }
 
 QJsonTreeModel* JsonBridge::treeModel() const
@@ -270,212 +295,248 @@ bool JsonBridge::isReady() const
     return m_ready;
 }
 
-QVariantMap JsonBridge::formatJson(const QString &input, const QString &indentType)
+void JsonBridge::formatJson(const QString &input, const QString &indentType)
 {
-    QVariantMap result;
-    result["success"] = false;
+    AsyncSerialiser::instance().enqueue("formatJson", [this, input, indentType]() {
+        QPromise<QVariant> promise;
+        auto future = promise.future();
+        promise.start();
+
+        QVariantMap result;
+        result["success"] = false;
 
 #ifdef __EMSCRIPTEN__
-    try {
-        val window = val::global("window");
-        val jsonBridge = window["JsonBridge"];
+        try {
+            val window = val::global("window");
+            val jsonBridge = window["JsonBridge"];
 
-        if (jsonBridge.isUndefined() || jsonBridge.isNull()) {
-            result["error"] = "JsonBridge not available";
-            return result;
+            if (jsonBridge.isUndefined() || jsonBridge.isNull()) {
+                result["error"] = "JsonBridge not available";
+            } else {
+                std::string inputStd = input.toStdString();
+                std::string indentStd = indentType.toStdString();
+
+                val jsResult = jsonBridge.call<val>("formatJson", inputStd, indentStd);
+
+                bool success = jsResult["success"].as<bool>();
+                result["success"] = success;
+
+                if (success) {
+                    std::string resultStr = jsResult["result"].as<std::string>();
+                    result["result"] = QString::fromStdString(resultStr);
+                } else {
+                    std::string errorStr = jsResult["error"].as<std::string>();
+                    result["error"] = QString::fromStdString(errorStr);
+                }
+            }
+        } catch (const std::exception &e) {
+            result["error"] = QString("Exception: %1").arg(e.what());
+        } catch (...) {
+            result["error"] = "Unknown error in formatJson";
         }
-
-        std::string inputStd = input.toStdString();
-        std::string indentStd = indentType.toStdString();
-
-        val jsResult = jsonBridge.call<val>("formatJson", inputStd, indentStd);
-
-        bool success = jsResult["success"].as<bool>();
-        result["success"] = success;
-
-        if (success) {
-            std::string resultStr = jsResult["result"].as<std::string>();
-            result["result"] = QString::fromStdString(resultStr);
-        } else {
-            std::string errorStr = jsResult["error"].as<std::string>();
-            result["error"] = QString::fromStdString(errorStr);
-        }
-    } catch (const std::exception &e) {
-        result["error"] = QString("Exception: %1").arg(e.what());
-    } catch (...) {
-        result["error"] = "Unknown error in formatJson";
-    }
 #else
-    // Desktop native implementation
-    QString formatted = formatJsonNative(input, indentType);
-    if (formatted.isEmpty()) {
-        result["error"] = "Invalid JSON";
-    } else {
-        result["success"] = true;
-        result["result"] = formatted;
-    }
+        // Desktop native implementation
+        QString formatted = formatJsonNative(input, indentType);
+        if (formatted.isEmpty()) {
+            result["error"] = "Invalid JSON";
+        } else {
+            result["success"] = true;
+            result["result"] = formatted;
+        }
 #endif
 
-    return result;
+        // Emit signal on main thread
+        QMetaObject::invokeMethod(this, [this, result]() {
+            emit formatCompleted(result);
+        }, Qt::QueuedConnection);
+
+        promise.addResult(QVariant::fromValue(result));
+        promise.finish();
+        return future;
+    });
 }
 
-QVariantMap JsonBridge::minifyJson(const QString &input)
+void JsonBridge::minifyJson(const QString &input)
 {
-    QVariantMap result;
-    result["success"] = false;
+    AsyncSerialiser::instance().enqueue("minifyJson", [this, input]() {
+        QPromise<QVariant> promise;
+        auto future = promise.future();
+        promise.start();
+
+        QVariantMap result;
+        result["success"] = false;
 
 #ifdef __EMSCRIPTEN__
-    try {
-        val window = val::global("window");
-        val jsonBridge = window["JsonBridge"];
+        try {
+            val window = val::global("window");
+            val jsonBridge = window["JsonBridge"];
 
-        if (jsonBridge.isUndefined() || jsonBridge.isNull()) {
-            result["error"] = "JsonBridge not available";
-            return result;
+            if (jsonBridge.isUndefined() || jsonBridge.isNull()) {
+                result["error"] = "JsonBridge not available";
+            } else {
+                std::string inputStd = input.toStdString();
+
+                val jsResult = jsonBridge.call<val>("minifyJson", inputStd);
+
+                bool success = jsResult["success"].as<bool>();
+                result["success"] = success;
+
+                if (success) {
+                    std::string resultStr = jsResult["result"].as<std::string>();
+                    result["result"] = QString::fromStdString(resultStr);
+                } else {
+                    std::string errorStr = jsResult["error"].as<std::string>();
+                    result["error"] = QString::fromStdString(errorStr);
+                }
+            }
+        } catch (const std::exception &e) {
+            result["error"] = QString("Exception: %1").arg(e.what());
+        } catch (...) {
+            result["error"] = "Unknown error in minifyJson";
         }
-
-        std::string inputStd = input.toStdString();
-
-        val jsResult = jsonBridge.call<val>("minifyJson", inputStd);
-
-        bool success = jsResult["success"].as<bool>();
-        result["success"] = success;
-
-        if (success) {
-            std::string resultStr = jsResult["result"].as<std::string>();
-            result["result"] = QString::fromStdString(resultStr);
-        } else {
-            std::string errorStr = jsResult["error"].as<std::string>();
-            result["error"] = QString::fromStdString(errorStr);
-        }
-    } catch (const std::exception &e) {
-        result["error"] = QString("Exception: %1").arg(e.what());
-    } catch (...) {
-        result["error"] = "Unknown error in minifyJson";
-    }
 #else
-    // Desktop native implementation
-    QString minified = minifyJsonNative(input);
-    if (minified.isEmpty()) {
-        result["error"] = "Invalid JSON";
-    } else {
-        result["success"] = true;
-        result["result"] = minified;
-    }
+        // Desktop native implementation
+        QString minified = minifyJsonNative(input);
+        if (minified.isEmpty()) {
+            result["error"] = "Invalid JSON";
+        } else {
+            result["success"] = true;
+            result["result"] = minified;
+        }
 #endif
 
-    return result;
+        // Emit signal on main thread
+        QMetaObject::invokeMethod(this, [this, result]() {
+            emit minifyCompleted(result);
+        }, Qt::QueuedConnection);
+
+        promise.addResult(QVariant::fromValue(result));
+        promise.finish();
+        return future;
+    });
 }
 
-QVariantMap JsonBridge::validateJson(const QString &input)
+void JsonBridge::validateJson(const QString &input)
 {
-    QVariantMap result;
-    result["isValid"] = false;
+    AsyncSerialiser::instance().enqueue("validateJson", [this, input]() {
+        QPromise<QVariant> promise;
+        auto future = promise.future();
+        promise.start();
+
+        QVariantMap result;
+        result["isValid"] = false;
 
 #ifdef __EMSCRIPTEN__
-    try {
-        val window = val::global("window");
-        val jsonBridge = window["JsonBridge"];
+        try {
+            val window = val::global("window");
+            val jsonBridge = window["JsonBridge"];
 
-        if (jsonBridge.isUndefined() || jsonBridge.isNull()) {
+            if (jsonBridge.isUndefined() || jsonBridge.isNull()) {
+                QVariantMap error;
+                error["message"] = "JsonBridge not available";
+                error["line"] = 0;
+                error["column"] = 0;
+                result["error"] = error;
+                result["stats"] = QVariantMap();
+            } else {
+                std::string inputStd = input.toStdString();
+
+                val jsResult = jsonBridge.call<val>("validateJson", inputStd);
+
+                bool isValid = jsResult["isValid"].as<bool>();
+                result["isValid"] = isValid;
+
+                if (isValid) {
+                    QVariantMap stats;
+                    val jsStats = jsResult["stats"];
+                    if (!jsStats.isUndefined()) {
+                        stats["object_count"] = jsStats["object_count"].isUndefined() ? 0 : jsStats["object_count"].as<int>();
+                        stats["array_count"] = jsStats["array_count"].isUndefined() ? 0 : jsStats["array_count"].as<int>();
+                        stats["string_count"] = jsStats["string_count"].isUndefined() ? 0 : jsStats["string_count"].as<int>();
+                        stats["number_count"] = jsStats["number_count"].isUndefined() ? 0 : jsStats["number_count"].as<int>();
+                        stats["boolean_count"] = jsStats["boolean_count"].isUndefined() ? 0 : jsStats["boolean_count"].as<int>();
+                        stats["null_count"] = jsStats["null_count"].isUndefined() ? 0 : jsStats["null_count"].as<int>();
+                        stats["total_keys"] = jsStats["total_keys"].isUndefined() ? 0 : jsStats["total_keys"].as<int>();
+                        stats["max_depth"] = jsStats["max_depth"].isUndefined() ? 0 : jsStats["max_depth"].as<int>();
+                    }
+                    result["stats"] = stats;
+                } else {
+                    val jsError = jsResult["error"];
+                    QVariantMap error;
+                    error["message"] = jsError["message"].isUndefined() ? QString("Unknown error") : QString::fromStdString(jsError["message"].as<std::string>());
+                    error["line"] = jsError["line"].isUndefined() ? 0 : jsError["line"].as<int>();
+                    error["column"] = jsError["column"].isUndefined() ? 0 : jsError["column"].as<int>();
+                    result["error"] = error;
+                    result["stats"] = QVariantMap();
+                }
+            }
+        } catch (const std::exception &e) {
             QVariantMap error;
-            error["message"] = "JsonBridge not available";
+            error["message"] = QString("Exception: %1").arg(e.what());
             error["line"] = 0;
             error["column"] = 0;
             result["error"] = error;
             result["stats"] = QVariantMap();
-            return result;
-        }
-
-        std::string inputStd = input.toStdString();
-
-        val jsResult = jsonBridge.call<val>("validateJson", inputStd);
-
-        bool isValid = jsResult["isValid"].as<bool>();
-        result["isValid"] = isValid;
-
-        if (isValid) {
-            QVariantMap stats;
-            val jsStats = jsResult["stats"];
-            if (!jsStats.isUndefined()) {
-                stats["object_count"] = jsStats["object_count"].isUndefined() ? 0 : jsStats["object_count"].as<int>();
-                stats["array_count"] = jsStats["array_count"].isUndefined() ? 0 : jsStats["array_count"].as<int>();
-                stats["string_count"] = jsStats["string_count"].isUndefined() ? 0 : jsStats["string_count"].as<int>();
-                stats["number_count"] = jsStats["number_count"].isUndefined() ? 0 : jsStats["number_count"].as<int>();
-                stats["boolean_count"] = jsStats["boolean_count"].isUndefined() ? 0 : jsStats["boolean_count"].as<int>();
-                stats["null_count"] = jsStats["null_count"].isUndefined() ? 0 : jsStats["null_count"].as<int>();
-                stats["total_keys"] = jsStats["total_keys"].isUndefined() ? 0 : jsStats["total_keys"].as<int>();
-                stats["max_depth"] = jsStats["max_depth"].isUndefined() ? 0 : jsStats["max_depth"].as<int>();
-            }
-            result["stats"] = stats;
-        } else {
-            val jsError = jsResult["error"];
+        } catch (...) {
             QVariantMap error;
-            error["message"] = jsError["message"].isUndefined() ? QString("Unknown error") : QString::fromStdString(jsError["message"].as<std::string>());
-            error["line"] = jsError["line"].isUndefined() ? 0 : jsError["line"].as<int>();
-            error["column"] = jsError["column"].isUndefined() ? 0 : jsError["column"].as<int>();
+            error["message"] = "Unknown error in validateJson";
+            error["line"] = 0;
+            error["column"] = 0;
             result["error"] = error;
             result["stats"] = QVariantMap();
         }
-    } catch (const std::exception &e) {
-        QVariantMap error;
-        error["message"] = QString("Exception: %1").arg(e.what());
-        error["line"] = 0;
-        error["column"] = 0;
-        result["error"] = error;
-        result["stats"] = QVariantMap();
-    } catch (...) {
-        QVariantMap error;
-        error["message"] = "Unknown error in validateJson";
-        error["line"] = 0;
-        error["column"] = 0;
-        result["error"] = error;
-        result["stats"] = QVariantMap();
-    }
 #else
-    // Desktop native implementation
-    QJsonParseError parseError;
-    QJsonDocument doc = QJsonDocument::fromJson(input.toUtf8(), &parseError);
+        // Desktop native implementation
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson(input.toUtf8(), &parseError);
 
-    if (parseError.error != QJsonParseError::NoError) {
-        QVariantMap error;
-        error["message"] = parseError.errorString();
-        // Calculate line and column from offset
-        int line = 1, column = 1;
-        for (int i = 0; i < parseError.offset && i < input.length(); ++i) {
-            if (input[i] == '\n') {
-                line++;
-                column = 1;
-            } else {
-                column++;
+        if (parseError.error != QJsonParseError::NoError) {
+            QVariantMap error;
+            error["message"] = parseError.errorString();
+            // Calculate line and column from offset
+            int line = 1, column = 1;
+            for (int i = 0; i < parseError.offset && i < input.length(); ++i) {
+                if (input[i] == '\n') {
+                    line++;
+                    column = 1;
+                } else {
+                    column++;
+                }
             }
-        }
-        error["line"] = line;
-        error["column"] = column;
-        result["error"] = error;
-        result["stats"] = QVariantMap();
-    } else {
-        result["isValid"] = true;
-        QVariantMap stats;
-        stats["object_count"] = 0;
-        stats["array_count"] = 0;
-        stats["string_count"] = 0;
-        stats["number_count"] = 0;
-        stats["boolean_count"] = 0;
-        stats["null_count"] = 0;
-        stats["total_keys"] = 0;
-        stats["max_depth"] = 0;
+            error["line"] = line;
+            error["column"] = column;
+            result["error"] = error;
+            result["stats"] = QVariantMap();
+        } else {
+            result["isValid"] = true;
+            QVariantMap stats;
+            stats["object_count"] = 0;
+            stats["array_count"] = 0;
+            stats["string_count"] = 0;
+            stats["number_count"] = 0;
+            stats["boolean_count"] = 0;
+            stats["null_count"] = 0;
+            stats["total_keys"] = 0;
+            stats["max_depth"] = 0;
 
-        if (doc.isObject()) {
-            countJsonStats(doc.object(), stats, 1);
-        } else if (doc.isArray()) {
-            countJsonStats(doc.array(), stats, 1);
+            if (doc.isObject()) {
+                countJsonStats(doc.object(), stats, 1);
+            } else if (doc.isArray()) {
+                countJsonStats(doc.array(), stats, 1);
+            }
+            result["stats"] = stats;
         }
-        result["stats"] = stats;
-    }
 #endif
 
-    return result;
+        // Emit signal on main thread
+        QMetaObject::invokeMethod(this, [this, result]() {
+            emit validateCompleted(result);
+        }, Qt::QueuedConnection);
+
+        promise.addResult(QVariant::fromValue(result));
+        promise.finish();
+        return future;
+    });
 }
 
 QString JsonBridge::highlightJson(const QString &input)
@@ -516,302 +577,397 @@ QString JsonBridge::highlightJson(const QString &input)
 
 void JsonBridge::copyToClipboard(const QString &text)
 {
-#ifdef __EMSCRIPTEN__
-    try {
-        val window = val::global("window");
-        val jsonBridge = window["JsonBridge"];
+    AsyncSerialiser::instance().enqueue("copyToClipboard", [this, text]() {
+        QPromise<QVariant> promise;
+        auto future = promise.future();
+        promise.start();
 
-        if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
-            std::string textStd = text.toStdString();
-            jsonBridge.call<void>("copyToClipboard", textStd);
+        bool success = false;
+
+#ifdef __EMSCRIPTEN__
+        try {
+            val window = val::global("window");
+            val jsonBridge = window["JsonBridge"];
+
+            if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
+                std::string textStd = text.toStdString();
+                jsonBridge.call<void>("copyToClipboard", textStd);
+                success = true;
+            }
+        } catch (...) {
+            qWarning() << "Failed to copy to clipboard";
         }
-    } catch (...) {
-        qWarning() << "Failed to copy to clipboard";
-    }
 #else
-    // Desktop native implementation
-    QClipboard *clipboard = QGuiApplication::clipboard();
-    if (clipboard) {
-        clipboard->setText(text);
-    }
+        // Desktop native implementation
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        if (clipboard) {
+            clipboard->setText(text);
+            success = true;
+        }
 #endif
+
+        // Emit signal on main thread
+        QMetaObject::invokeMethod(this, [this, success]() {
+            emit copyCompleted(success);
+        }, Qt::QueuedConnection);
+
+        promise.addResult(QVariant::fromValue(success));
+        promise.finish();
+        return future;
+    });
 }
 
-QString JsonBridge::readFromClipboard()
+void JsonBridge::readFromClipboard()
 {
-#ifdef __EMSCRIPTEN__
-    try {
-        val window = val::global("window");
-        val jsonBridge = window["JsonBridge"];
+    AsyncSerialiser::instance().enqueue("readFromClipboard", [this]() {
+        QPromise<QVariant> promise;
+        auto future = promise.future();
+        promise.start();
 
-        if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
-            // Note: This is a synchronous call to an async JS function
-            // The JS side handles the promise internally
-            val promise = jsonBridge.call<val>("readFromClipboard");
-            val result = promise.await();
-            if (!result.isUndefined() && !result.isNull()) {
-                std::string text = result.as<std::string>();
-                return QString::fromStdString(text);
+        QString content;
+
+#ifdef __EMSCRIPTEN__
+        try {
+            val window = val::global("window");
+            val jsonBridge = window["JsonBridge"];
+
+            if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
+                // Note: This is a synchronous call to an async JS function
+                // The JS side handles the promise internally
+                val jsPromise = jsonBridge.call<val>("readFromClipboard");
+                val result = jsPromise.await();
+                if (!result.isUndefined() && !result.isNull()) {
+                    std::string text = result.as<std::string>();
+                    content = QString::fromStdString(text);
+                }
             }
+        } catch (const std::exception &e) {
+            qWarning() << "Failed to read from clipboard:" << e.what();
+        } catch (...) {
+            qWarning() << "Failed to read from clipboard";
         }
-    } catch (const std::exception &e) {
-        qWarning() << "Failed to read from clipboard:" << e.what();
-    } catch (...) {
-        qWarning() << "Failed to read from clipboard";
-    }
-    return QString();
 #else
-    // Desktop native implementation
-    QClipboard *clipboard = QGuiApplication::clipboard();
-    if (clipboard) {
-        return clipboard->text();
-    }
+        // Desktop native implementation
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        if (clipboard) {
+            content = clipboard->text();
+        }
 #endif
-    return QString();
+
+        // Emit signal on main thread
+        QMetaObject::invokeMethod(this, [this, content]() {
+            emit clipboardRead(content);
+        }, Qt::QueuedConnection);
+
+        promise.addResult(QVariant::fromValue(content));
+        promise.finish();
+        return future;
+    });
 }
 
 // History methods
 
 void JsonBridge::saveToHistory(const QString &json)
 {
+    AsyncSerialiser::instance().enqueue("saveToHistory", [this, json]() {
+        QPromise<QVariant> promise;
+        auto future = promise.future();
+        promise.start();
+
+        bool success = false;
+        QString id;
+
 #ifdef __EMSCRIPTEN__
-    try {
-        val window = val::global("window");
-        val jsonBridge = window["JsonBridge"];
+        try {
+            val window = val::global("window");
+            val jsonBridge = window["JsonBridge"];
 
-        if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
-            std::string jsonStd = json.toStdString();
-            val promise = jsonBridge.call<val>("saveToHistory", jsonStd);
-            val result = promise.await();
+            if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
+                std::string jsonStd = json.toStdString();
+                val jsPromise = jsonBridge.call<val>("saveToHistory", jsonStd);
+                val result = jsPromise.await();
 
-            if (!result.isUndefined() && !result.isNull()) {
-                std::string resultStr = result.as<std::string>();
-                QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(resultStr).toUtf8());
-                QJsonObject obj = doc.object();
-                bool success = obj["success"].toBool();
-                QString id = obj["id"].toString();
-                emit historySaved(success, id);
+                if (!result.isUndefined() && !result.isNull()) {
+                    std::string resultStr = result.as<std::string>();
+                    QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(resultStr).toUtf8());
+                    QJsonObject obj = doc.object();
+                    success = obj["success"].toBool();
+                    id = obj["id"].toString();
+                }
             }
+        } catch (const std::exception &e) {
+            qWarning() << "Failed to save to history:" << e.what();
+        } catch (...) {
+            qWarning() << "Failed to save to history";
         }
-    } catch (const std::exception &e) {
-        qWarning() << "Failed to save to history:" << e.what();
-        emit historySaved(false, QString());
-    } catch (...) {
-        qWarning() << "Failed to save to history";
-        emit historySaved(false, QString());
-    }
 #else
-    // Desktop native implementation
-    QJsonArray history = loadHistoryFromFile();
+        // Desktop native implementation
+        QJsonArray history = loadHistoryFromFile();
 
-    QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    QString timestamp = QDateTime::currentDateTime().toString(Qt::ISODate);
-    QString preview = json.left(100).simplified();
-    if (json.length() > 100) preview += "...";
+        id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        QString timestamp = QDateTime::currentDateTime().toString(Qt::ISODate);
+        QString preview = json.left(100).simplified();
+        if (json.length() > 100) preview += "...";
 
-    QJsonObject entry;
-    entry["id"] = id;
-    entry["content"] = json;
-    entry["timestamp"] = timestamp;
-    entry["preview"] = preview;
-    entry["size"] = json.size();
+        QJsonObject entry;
+        entry["id"] = id;
+        entry["content"] = json;
+        entry["timestamp"] = timestamp;
+        entry["preview"] = preview;
+        entry["size"] = json.size();
 
-    // Add to beginning of array (most recent first)
-    QJsonArray newHistory;
-    newHistory.append(entry);
-    for (int i = 0; i < history.size() && i < 49; ++i) { // Keep max 50 entries
-        newHistory.append(history[i]);
-    }
+        // Add to beginning of array (most recent first)
+        QJsonArray newHistory;
+        newHistory.append(entry);
+        for (int i = 0; i < history.size() && i < 49; ++i) { // Keep max 50 entries
+            newHistory.append(history[i]);
+        }
 
-    bool success = saveHistoryToFile(newHistory);
-    emit historySaved(success, id);
+        success = saveHistoryToFile(newHistory);
 #endif
+
+        // Emit signal on main thread
+        QMetaObject::invokeMethod(this, [this, success, id]() {
+            emit historySaved(success, id);
+        }, Qt::QueuedConnection);
+
+        promise.addResult(QVariant::fromValue(success));
+        promise.finish();
+        return future;
+    });
 }
 
-QVariantList JsonBridge::loadHistory()
+void JsonBridge::loadHistory()
 {
-    QVariantList entries;
+    AsyncSerialiser::instance().enqueue("loadHistory", [this]() {
+        QPromise<QVariant> promise;
+        auto future = promise.future();
+        promise.start();
+
+        QVariantList entries;
 
 #ifdef __EMSCRIPTEN__
-    try {
-        val window = val::global("window");
-        val jsonBridge = window["JsonBridge"];
+        try {
+            val window = val::global("window");
+            val jsonBridge = window["JsonBridge"];
 
-        if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
-            val promise = jsonBridge.call<val>("loadHistory");
-            val result = promise.await();
+            if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
+                val jsPromise = jsonBridge.call<val>("loadHistory");
+                val result = jsPromise.await();
 
-            if (!result.isUndefined() && !result.isNull()) {
-                std::string resultStr = result.as<std::string>();
-                QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(resultStr).toUtf8());
-                QJsonObject obj = doc.object();
+                if (!result.isUndefined() && !result.isNull()) {
+                    std::string resultStr = result.as<std::string>();
+                    QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(resultStr).toUtf8());
+                    QJsonObject obj = doc.object();
 
-                if (obj["success"].toBool()) {
-                    QJsonArray entriesArray = obj["entries"].toArray();
-                    for (const QJsonValue &val : entriesArray) {
-                        QJsonObject entry = val.toObject();
-                        QVariantMap entryMap;
-                        entryMap["id"] = entry["id"].toString();
-                        entryMap["content"] = entry["content"].toString();
-                        entryMap["timestamp"] = entry["timestamp"].toString();
-                        entryMap["preview"] = entry["preview"].toString();
-                        entryMap["size"] = entry["size"].toInt();
-                        entries.append(entryMap);
+                    if (obj["success"].toBool()) {
+                        QJsonArray entriesArray = obj["entries"].toArray();
+                        for (const QJsonValue &v : entriesArray) {
+                            QJsonObject entry = v.toObject();
+                            QVariantMap entryMap;
+                            entryMap["id"] = entry["id"].toString();
+                            entryMap["content"] = entry["content"].toString();
+                            entryMap["timestamp"] = entry["timestamp"].toString();
+                            entryMap["preview"] = entry["preview"].toString();
+                            entryMap["size"] = entry["size"].toInt();
+                            entries.append(entryMap);
+                        }
                     }
                 }
             }
+        } catch (const std::exception &e) {
+            qWarning() << "Failed to load history:" << e.what();
+        } catch (...) {
+            qWarning() << "Failed to load history";
         }
-    } catch (const std::exception &e) {
-        qWarning() << "Failed to load history:" << e.what();
-    } catch (...) {
-        qWarning() << "Failed to load history";
-    }
 #else
-    // Desktop native implementation
-    QJsonArray history = loadHistoryFromFile();
-    for (const QJsonValue &val : history) {
-        QJsonObject entry = val.toObject();
-        QVariantMap entryMap;
-        entryMap["id"] = entry["id"].toString();
-        entryMap["content"] = entry["content"].toString();
-        entryMap["timestamp"] = entry["timestamp"].toString();
-        entryMap["preview"] = entry["preview"].toString();
-        entryMap["size"] = entry["size"].toInt();
-        entries.append(entryMap);
-    }
+        // Desktop native implementation
+        QJsonArray history = loadHistoryFromFile();
+        for (const QJsonValue &v : history) {
+            QJsonObject entry = v.toObject();
+            QVariantMap entryMap;
+            entryMap["id"] = entry["id"].toString();
+            entryMap["content"] = entry["content"].toString();
+            entryMap["timestamp"] = entry["timestamp"].toString();
+            entryMap["preview"] = entry["preview"].toString();
+            entryMap["size"] = entry["size"].toInt();
+            entries.append(entryMap);
+        }
 #endif
 
-    emit historyLoaded(entries);
-    return entries;
+        // Emit signal on main thread
+        QMetaObject::invokeMethod(this, [this, entries]() {
+            emit historyLoaded(entries);
+        }, Qt::QueuedConnection);
+
+        promise.addResult(QVariant::fromValue(entries));
+        promise.finish();
+        return future;
+    });
 }
 
-QString JsonBridge::getHistoryEntry(const QString &id)
+void JsonBridge::getHistoryEntry(const QString &id)
 {
+    AsyncSerialiser::instance().enqueue("getHistoryEntry", [this, id]() {
+        QPromise<QVariant> promise;
+        auto future = promise.future();
+        promise.start();
+
+        QString content;
+
 #ifdef __EMSCRIPTEN__
-    try {
-        val window = val::global("window");
-        val jsonBridge = window["JsonBridge"];
+        try {
+            val window = val::global("window");
+            val jsonBridge = window["JsonBridge"];
 
-        if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
-            std::string idStd = id.toStdString();
-            val promise = jsonBridge.call<val>("getHistoryEntry", idStd);
-            val result = promise.await();
+            if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
+                std::string idStd = id.toStdString();
+                val jsPromise = jsonBridge.call<val>("getHistoryEntry", idStd);
+                val result = jsPromise.await();
 
-            if (!result.isUndefined() && !result.isNull()) {
-                std::string resultStr = result.as<std::string>();
-                QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(resultStr).toUtf8());
-                QJsonObject obj = doc.object();
+                if (!result.isUndefined() && !result.isNull()) {
+                    std::string resultStr = result.as<std::string>();
+                    QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(resultStr).toUtf8());
+                    QJsonObject obj = doc.object();
 
-                if (obj["success"].toBool()) {
-                    QJsonObject entry = obj["entry"].toObject();
-                    QString content = entry["content"].toString();
-                    emit historyEntryLoaded(content);
-                    return content;
+                    if (obj["success"].toBool()) {
+                        QJsonObject entry = obj["entry"].toObject();
+                        content = entry["content"].toString();
+                    }
                 }
             }
+        } catch (const std::exception &e) {
+            qWarning() << "Failed to get history entry:" << e.what();
+        } catch (...) {
+            qWarning() << "Failed to get history entry";
         }
-    } catch (const std::exception &e) {
-        qWarning() << "Failed to get history entry:" << e.what();
-    } catch (...) {
-        qWarning() << "Failed to get history entry";
-    }
 #else
-    // Desktop native implementation
-    QJsonArray history = loadHistoryFromFile();
-    for (const QJsonValue &val : history) {
-        QJsonObject entry = val.toObject();
-        if (entry["id"].toString() == id) {
-            QString content = entry["content"].toString();
-            emit historyEntryLoaded(content);
-            return content;
+        // Desktop native implementation
+        QJsonArray history = loadHistoryFromFile();
+        for (const QJsonValue &v : history) {
+            QJsonObject entry = v.toObject();
+            if (entry["id"].toString() == id) {
+                content = entry["content"].toString();
+                break;
+            }
         }
-    }
 #endif
 
-    emit historyEntryLoaded(QString());
-    return QString();
+        // Emit signal on main thread
+        QMetaObject::invokeMethod(this, [this, content]() {
+            emit historyEntryLoaded(content);
+        }, Qt::QueuedConnection);
+
+        promise.addResult(QVariant::fromValue(content));
+        promise.finish();
+        return future;
+    });
 }
 
 void JsonBridge::deleteHistoryEntry(const QString &id)
 {
+    AsyncSerialiser::instance().enqueue("deleteHistoryEntry", [this, id]() {
+        QPromise<QVariant> promise;
+        auto future = promise.future();
+        promise.start();
+
+        bool success = false;
+
 #ifdef __EMSCRIPTEN__
-    try {
-        val window = val::global("window");
-        val jsonBridge = window["JsonBridge"];
+        try {
+            val window = val::global("window");
+            val jsonBridge = window["JsonBridge"];
 
-        if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
-            std::string idStd = id.toStdString();
-            val promise = jsonBridge.call<val>("deleteHistoryEntry", idStd);
-            val result = promise.await();
+            if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
+                std::string idStd = id.toStdString();
+                val jsPromise = jsonBridge.call<val>("deleteHistoryEntry", idStd);
+                val result = jsPromise.await();
 
-            if (!result.isUndefined() && !result.isNull()) {
-                std::string resultStr = result.as<std::string>();
-                QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(resultStr).toUtf8());
-                QJsonObject obj = doc.object();
-                emit historyEntryDeleted(obj["success"].toBool());
-                return;
+                if (!result.isUndefined() && !result.isNull()) {
+                    std::string resultStr = result.as<std::string>();
+                    QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(resultStr).toUtf8());
+                    QJsonObject obj = doc.object();
+                    success = obj["success"].toBool();
+                }
+            }
+        } catch (const std::exception &e) {
+            qWarning() << "Failed to delete history entry:" << e.what();
+        } catch (...) {
+            qWarning() << "Failed to delete history entry";
+        }
+#else
+        // Desktop native implementation
+        QJsonArray history = loadHistoryFromFile();
+        QJsonArray newHistory;
+        bool found = false;
+        for (const QJsonValue &v : history) {
+            QJsonObject entry = v.toObject();
+            if (entry["id"].toString() != id) {
+                newHistory.append(entry);
+            } else {
+                found = true;
             }
         }
-    } catch (const std::exception &e) {
-        qWarning() << "Failed to delete history entry:" << e.what();
-    } catch (...) {
-        qWarning() << "Failed to delete history entry";
-    }
-#else
-    // Desktop native implementation
-    QJsonArray history = loadHistoryFromFile();
-    QJsonArray newHistory;
-    bool found = false;
-    for (const QJsonValue &val : history) {
-        QJsonObject entry = val.toObject();
-        if (entry["id"].toString() != id) {
-            newHistory.append(entry);
-        } else {
-            found = true;
+        if (found) {
+            success = saveHistoryToFile(newHistory);
         }
-    }
-    if (found) {
-        bool success = saveHistoryToFile(newHistory);
-        emit historyEntryDeleted(success);
-        return;
-    }
 #endif
 
-    emit historyEntryDeleted(false);
+        // Emit signal on main thread
+        QMetaObject::invokeMethod(this, [this, success]() {
+            emit historyEntryDeleted(success);
+        }, Qt::QueuedConnection);
+
+        promise.addResult(QVariant::fromValue(success));
+        promise.finish();
+        return future;
+    });
 }
 
 void JsonBridge::clearHistory()
 {
+    AsyncSerialiser::instance().enqueue("clearHistory", [this]() {
+        QPromise<QVariant> promise;
+        auto future = promise.future();
+        promise.start();
+
+        bool success = false;
+
 #ifdef __EMSCRIPTEN__
-    try {
-        val window = val::global("window");
-        val jsonBridge = window["JsonBridge"];
+        try {
+            val window = val::global("window");
+            val jsonBridge = window["JsonBridge"];
 
-        if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
-            val promise = jsonBridge.call<val>("clearHistory");
-            val result = promise.await();
+            if (!jsonBridge.isUndefined() && !jsonBridge.isNull()) {
+                val jsPromise = jsonBridge.call<val>("clearHistory");
+                val result = jsPromise.await();
 
-            if (!result.isUndefined() && !result.isNull()) {
-                std::string resultStr = result.as<std::string>();
-                QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(resultStr).toUtf8());
-                QJsonObject obj = doc.object();
-                emit historyCleared(obj["success"].toBool());
-                return;
+                if (!result.isUndefined() && !result.isNull()) {
+                    std::string resultStr = result.as<std::string>();
+                    QJsonDocument doc = QJsonDocument::fromJson(QString::fromStdString(resultStr).toUtf8());
+                    QJsonObject obj = doc.object();
+                    success = obj["success"].toBool();
+                }
             }
+        } catch (const std::exception &e) {
+            qWarning() << "Failed to clear history:" << e.what();
+        } catch (...) {
+            qWarning() << "Failed to clear history";
         }
-    } catch (const std::exception &e) {
-        qWarning() << "Failed to clear history:" << e.what();
-    } catch (...) {
-        qWarning() << "Failed to clear history";
-    }
 #else
-    // Desktop native implementation
-    bool success = saveHistoryToFile(QJsonArray());
-    emit historyCleared(success);
-    return;
+        // Desktop native implementation
+        success = saveHistoryToFile(QJsonArray());
 #endif
 
-    emit historyCleared(false);
+        // Emit signal on main thread
+        QMetaObject::invokeMethod(this, [this, success]() {
+            emit historyCleared(success);
+        }, Qt::QueuedConnection);
+
+        promise.addResult(QVariant::fromValue(success));
+        promise.finish();
+        return future;
+    });
 }
 
 bool JsonBridge::isHistoryAvailable()

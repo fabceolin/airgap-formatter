@@ -23,11 +23,132 @@ ApplicationWindow {
     // Store current formatted JSON for both views
     property string currentFormattedJson: ""
 
-    // Track when JsonBridge becomes ready
+    // Track when JsonBridge becomes ready and handle async operation results
     Connections {
         target: JsonBridge
         function onReadyChanged() {
             wasmInitialized = JsonBridge.ready;
+        }
+
+        function onFormatCompleted(result) {
+            if (result.success) {
+                currentFormattedJson = result.result;
+                outputPane.text = result.result;
+                // Load tree model for tree view (synchronous)
+                JsonBridge.loadTreeModel(result.result);
+                // Update status bar from format result (avoid extra async validateJson call)
+                statusBar.isValid = true;
+                statusBar.errorMessage = "";
+                inputPane.errorLine = -1;
+                inputPane.errorMessage = "";
+                // Stop pending validation - formatting already validated
+                validationTimer.stop();
+                // Save to history via AsyncSerialiser queue
+                JsonBridge.saveToHistory(result.result);
+                // Auto-expand tree view after model loads
+                autoExpandTimer.restart();
+            } else {
+                currentFormattedJson = "";
+                outputPane.text = "Error: " + result.error;
+            }
+        }
+
+        function onMinifyCompleted(result) {
+            if (result.success) {
+                currentFormattedJson = result.result;
+                outputPane.text = result.result;
+                // Load tree model for tree view (synchronous)
+                JsonBridge.loadTreeModel(result.result);
+                // Update status bar (avoid extra async validateJson call)
+                statusBar.isValid = true;
+                statusBar.errorMessage = "";
+                inputPane.errorLine = -1;
+                inputPane.errorMessage = "";
+                // Stop pending validation - minifying already validated
+                validationTimer.stop();
+                // Save to history via AsyncSerialiser queue
+                JsonBridge.saveToHistory(result.result);
+                // Switch to text mode for minified output
+                window.viewMode = "text";
+            } else {
+                currentFormattedJson = "";
+                outputPane.text = "Error: " + result.error;
+            }
+        }
+
+        function onValidateCompleted(result) {
+            statusBar.isValid = result.isValid;
+
+            if (result.isValid) {
+                statusBar.errorMessage = "";
+                statusBar.errorLine = 0;
+                statusBar.errorColumn = 0;
+                statusBar.objectCount = result.stats.object_count || 0;
+                statusBar.arrayCount = result.stats.array_count || 0;
+                statusBar.stringCount = result.stats.string_count || 0;
+                statusBar.numberCount = result.stats.number_count || 0;
+                statusBar.booleanCount = result.stats.boolean_count || 0;
+                statusBar.nullCount = result.stats.null_count || 0;
+                statusBar.totalKeys = result.stats.total_keys || 0;
+                statusBar.maxDepth = result.stats.max_depth || 0;
+                inputPane.errorLine = -1;
+                inputPane.errorMessage = "";
+            } else if (result.error) {
+                statusBar.errorMessage = result.error.message || "Unknown error";
+                statusBar.errorLine = result.error.line || 1;
+                statusBar.errorColumn = result.error.column || 1;
+                inputPane.errorLine = result.error.line || 1;
+                inputPane.errorMessage = result.error.message || "Unknown error";
+            }
+        }
+
+        function onHistoryLoaded(entries) {
+            // History panel will receive this via its own connection
+        }
+
+        function onHistorySaved(success, id) {
+            // History saved callback - can be used for feedback if needed
+        }
+
+        function onClipboardRead(content) {
+            if (content && content.length > 0) {
+                if (window.pasteMode === "simple") {
+                    // Simple paste - just put text in input
+                    inputPane.text = content;
+                } else {
+                    // Auto-format paste
+                    handlePastedContent(content);
+                }
+            }
+            window.pasteMode = "auto"; // Reset to default
+        }
+
+        function onCopyCompleted(success) {
+            if (success) {
+                toolbar.copyButtonText = "Copied!";
+                copyFeedbackTimer.restart();
+            }
+        }
+
+        function onBusyChanged(busy) {
+            // Can be used for UI loading states
+        }
+    }
+
+    // Handle pasted content with auto-format
+    function handlePastedContent(text) {
+        // Check if we should auto-format: input is empty or fully selected
+        const shouldAutoFormat = inputPane.text.trim() === "" ||
+                                 inputPane.isFullySelected();
+
+        if (shouldAutoFormat) {
+            // Try to format the pasted content
+            inputPane.text = text;  // Put original in input
+            JsonBridge.formatJson(text, toolbar.selectedIndent);
+            // Result comes via onFormatCompleted signal
+        } else {
+            // Has partial content - paste normally without auto-format
+            inputPane.text = text;
         }
     }
 
@@ -41,7 +162,7 @@ ApplicationWindow {
     Timer {
         id: copyFeedbackTimer
         interval: 1500
-        onTriggered: toolbar.copyButtonText = "Copy Output"
+        onTriggered: toolbar.copyButtonText = "Copy"
     }
 
     // Debounce timer for validation
@@ -58,37 +179,8 @@ ApplicationWindow {
         onTriggered: jsonTreeView.expandAll()
     }
 
-    // Timer for deferred history save (to avoid ASYNCIFY conflicts)
-    Timer {
-        id: saveHistoryTimer
-        interval: 100
-        property string jsonToSave: ""
-        onTriggered: {
-            if (jsonToSave) {
-                JsonBridge.saveToHistory(jsonToSave);
-                jsonToSave = "";
-            }
-        }
-    }
-
-    // Timer for deferred format request (to avoid ASYNCIFY conflicts when loading from history)
-    Timer {
-        id: deferredFormatTimer
-        interval: 50
-        property string indentType: "spaces:4"
-        onTriggered: toolbar.formatRequested(indentType)
-    }
-
-    // Flag to skip validation during format (already validated by format)
-    property bool skipNextValidation: false
 
     function validateInput() {
-        // Skip validation if flag is set (to avoid ASYNCIFY conflicts)
-        if (skipNextValidation) {
-            skipNextValidation = false;
-            return;
-        }
-
         if (!inputPane.text || !inputPane.text.trim()) {
             statusBar.isValid = true;
             statusBar.errorMessage = "";
@@ -101,31 +193,8 @@ ApplicationWindow {
             return;
         }
 
-        const result = JsonBridge.validateJson(inputPane.text);
-
-        statusBar.isValid = result.isValid;
-
-        if (result.isValid) {
-            statusBar.errorMessage = "";
-            statusBar.errorLine = 0;
-            statusBar.errorColumn = 0;
-            statusBar.objectCount = result.stats.object_count || 0;
-            statusBar.arrayCount = result.stats.array_count || 0;
-            statusBar.stringCount = result.stats.string_count || 0;
-            statusBar.numberCount = result.stats.number_count || 0;
-            statusBar.booleanCount = result.stats.boolean_count || 0;
-            statusBar.nullCount = result.stats.null_count || 0;
-            statusBar.totalKeys = result.stats.total_keys || 0;
-            statusBar.maxDepth = result.stats.max_depth || 0;
-            inputPane.errorLine = -1;
-            inputPane.errorMessage = "";
-        } else if (result.error) {
-            statusBar.errorMessage = result.error.message || "Unknown error";
-            statusBar.errorLine = result.error.line || 1;
-            statusBar.errorColumn = result.error.column || 1;
-            inputPane.errorLine = result.error.line || 1;
-            inputPane.errorMessage = result.error.message || "Unknown error";
-        }
+        // Async call - result comes via onValidateCompleted signal
+        JsonBridge.validateJson(inputPane.text);
     }
 
     ColumnLayout {
@@ -163,65 +232,22 @@ ApplicationWindow {
                 if (!inputPane.text.trim()) {
                     return;
                 }
-                const result = JsonBridge.formatJson(inputPane.text, indentType);
-                if (result.success) {
-                    currentFormattedJson = result.result;
-                    outputPane.text = result.result;
-                    // Load tree model for tree view (synchronous)
-                    JsonBridge.loadTreeModel(result.result);
-                    // Update status bar from format result (avoid extra async validateJson call)
-                    statusBar.isValid = true;
-                    statusBar.errorMessage = "";
-                    inputPane.errorLine = -1;
-                    inputPane.errorMessage = "";
-                    // Skip the next validation since we just formatted valid JSON
-                    skipNextValidation = true;
-                    validationTimer.stop();
-                    // Defer history save to avoid ASYNCIFY conflicts
-                    saveHistoryTimer.jsonToSave = result.result;
-                    saveHistoryTimer.restart();
-                    // Auto-expand tree view after model loads
-                    autoExpandTimer.restart();
-                } else {
-                    currentFormattedJson = "";
-                    outputPane.text = "Error: " + result.error;
-                }
+                // Async call - result comes via onFormatCompleted signal
+                JsonBridge.formatJson(inputPane.text, indentType);
             }
 
             onMinifyRequested: {
                 if (!inputPane.text.trim()) {
                     return;
                 }
-                const result = JsonBridge.minifyJson(inputPane.text);
-                if (result.success) {
-                    currentFormattedJson = result.result;
-                    outputPane.text = result.result;
-                    // Load tree model for tree view (synchronous)
-                    JsonBridge.loadTreeModel(result.result);
-                    // Update status bar (avoid extra async validateJson call)
-                    statusBar.isValid = true;
-                    statusBar.errorMessage = "";
-                    inputPane.errorLine = -1;
-                    inputPane.errorMessage = "";
-                    // Skip the next validation
-                    skipNextValidation = true;
-                    validationTimer.stop();
-                    // Defer history save to avoid ASYNCIFY conflicts
-                    saveHistoryTimer.jsonToSave = result.result;
-                    saveHistoryTimer.restart();
-                    // Switch to text mode for minified output
-                    window.viewMode = "text";
-                } else {
-                    currentFormattedJson = "";
-                    outputPane.text = "Error: " + result.error;
-                }
+                // Async call - result comes via onMinifyCompleted signal
+                JsonBridge.minifyJson(inputPane.text);
             }
 
             onCopyRequested: {
                 if (currentFormattedJson) {
+                    // Async call - result comes via onCopyCompleted signal
                     JsonBridge.copyToClipboard(currentFormattedJson);
-                    toolbar.copyButtonText = "Copied!";
-                    copyFeedbackTimer.restart();
                 }
             }
 
@@ -306,14 +332,11 @@ ApplicationWindow {
         parent: Overlay.overlay
 
         onEntrySelected: (content) => {
-            // Stop any pending validation to avoid ASYNCIFY conflicts
+            // Stop any pending validation - format will re-validate
             validationTimer.stop();
-            skipNextValidation = true;
             inputPane.text = content;
-            // Defer format to next event loop iteration to avoid ASYNCIFY conflicts
-            // (the drawer close animation triggers events that can interfere)
-            deferredFormatTimer.indentType = toolbar.selectedIndent;
-            deferredFormatTimer.restart();
+            // Direct call - AsyncSerialiser handles operation serialization
+            JsonBridge.formatJson(content, toolbar.selectedIndent);
         }
     }
 
@@ -336,52 +359,23 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+Shift+Ins"
         onActivated: {
-            const text = JsonBridge.readFromClipboard();
-            if (text) {
-                inputPane.text = text;
-            }
+            // Async call - result comes via onClipboardRead signal
+            // Set a flag so we know this is a simple paste (no auto-format)
+            window.pasteMode = "simple";
+            JsonBridge.readFromClipboard();
         }
     }
+
+    // Track paste mode for clipboard read handler
+    property string pasteMode: "auto"
 
     // Ctrl+V paste with auto-format (Qt WASM doesn't handle browser paste events well)
     Shortcut {
         sequences: [StandardKey.Paste]
         onActivated: {
-            const text = JsonBridge.readFromClipboard();
-            if (text) {
-                // Check if we should auto-format: input is empty or fully selected
-                const shouldAutoFormat = inputPane.text.trim() === "" ||
-                                         inputPane.isFullySelected();
-
-                if (shouldAutoFormat) {
-                    // Try to format the pasted content
-                    const result = JsonBridge.formatJson(text, toolbar.selectedIndent);
-                    if (result.success) {
-                        inputPane.text = text;  // Put original in input
-                        currentFormattedJson = result.result;
-                        outputPane.text = result.result;
-                        JsonBridge.loadTreeModel(result.result);
-                        // Update status bar (avoid extra async call)
-                        statusBar.isValid = true;
-                        statusBar.errorMessage = "";
-                        inputPane.errorLine = -1;
-                        inputPane.errorMessage = "";
-                        skipNextValidation = true;
-                        validationTimer.stop();
-                        // Defer history save to avoid ASYNCIFY conflicts
-                        saveHistoryTimer.jsonToSave = result.result;
-                        saveHistoryTimer.restart();
-                        // Auto-expand tree view after model loads
-                        autoExpandTimer.restart();
-                    } else {
-                        // Invalid JSON - just paste without formatting
-                        inputPane.text = text;
-                    }
-                } else {
-                    // Has partial content - paste normally without auto-format
-                    inputPane.text = text;
-                }
-            }
+            // Async call - result comes via onClipboardRead signal
+            window.pasteMode = "auto";
+            JsonBridge.readFromClipboard();
         }
     }
 

@@ -113,6 +113,7 @@ echo "=== Copying static assets ==="\n\
 cp public/index.html dist/\n\
 cp public/bridge.js dist/\n\
 cp public/history-storage.js dist/\n\
+cp public/jspi-detect.js dist/\n\
 cp public/sw.js dist/\n\
 cp public/manifest.json dist/\n\
 cp public/404.html dist/\n\

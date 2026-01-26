@@ -3,7 +3,7 @@
  * Enables offline functionality by caching all application assets
  */
 
-const CACHE_NAME = 'airgap-json-formatter-v3';
+const CACHE_NAME = 'airgap-json-formatter-v4';
 
 // Assets to precache for offline use (relative paths for GitHub Pages compatibility)
 const PRECACHE_ASSETS = [
@@ -11,6 +11,7 @@ const PRECACHE_ASSETS = [
     './index.html',
     './bridge.js',
     './history-storage.js',
+    './jspi-detect.js',
     './pkg/airgap_json_formatter.js',
     './pkg/airgap_json_formatter_bg.wasm',
     './manifest.json',

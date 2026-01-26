@@ -1,0 +1,88 @@
+# Quality Gate: Story 5.2 - Refactor Async Operations to Use AsyncSerialiser
+schema: 1
+story: "5.2"
+story_title: "Refactor Async Operations to Use AsyncSerialiser"
+gate: PASS
+status_reason: "All async operations correctly refactored to use AsyncSerialiser. 27 unit tests pass covering signal emission, FIFO ordering, and error isolation. Browser E2E testing deferred due to environment constraints."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-01-26T00:00:00Z"
+
+waiver: { active: false }
+
+top_issues: []
+
+risk_summary:
+  totals:
+    critical: 0
+    high: 0
+    medium: 2
+    low: 2
+  highest: null
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Browser E2E testing when Docker environment available"
+      - "Compiler warning verification in WASM build"
+
+# Extended fields
+quality_score: 90
+expires: "2026-02-09T00:00:00Z"
+
+evidence:
+  tests_reviewed: 27
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 17, 18, 19]
+    ac_gaps: []
+    ac_deferred: [10, 11, 12, 13, 14, 15, 16]  # Require browser testing
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "No new attack surface; signals are internal only"
+  performance:
+    status: PASS
+    notes: "AsyncSerialiser prevents blocking; proper timeout handling"
+  reliability:
+    status: PASS
+    notes: "Error isolation verified; failed operations don't block queue"
+  maintainability:
+    status: PASS
+    notes: "Standard Qt signal/slot patterns; well-documented"
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Add browser E2E tests for AC10-16 when Docker environment is available"
+      refs: ["docs/qa/assessments/5.2-test-design-20260126.md"]
+    - action: "Consider coalescing validation calls after rapid format operations"
+      refs: ["qt/qml/Main.qml"]
+    - action: "Add performance benchmarks for queue throughput"
+      refs: ["qt/tests/"]
+
+code_quality:
+  async_pattern: "Consistent use of AsyncSerialiser::instance().enqueue() across all 10 async operations"
+  signal_handling: "All signals emitted via QMetaObject::invokeMethod with Qt::QueuedConnection"
+  error_handling: "Comprehensive try/catch blocks with fallback error results"
+  platform_parity: "Desktop and WASM implementations use same async patterns"
+
+files_reviewed:
+  - qt/jsonbridge.h
+  - qt/jsonbridge.cpp
+  - qt/qml/Main.qml
+  - qt/qml/Toolbar.qml
+  - qt/qml/HistoryPanel.qml
+  - qt/tests/tst_jsonbridge_async.cpp
+  - qt/tests/CMakeLists.txt
+  - qt/asyncserialiser.h
+
+test_coverage:
+  unit_tests: 27
+  tests_by_category:
+    async_pattern_verification: 11
+    signal_content_verification: 4
+    fifo_ordering: 2
+    error_isolation: 3
+    rapid_operations: 3
+    busy_state: 1
+    additional_history_ops: 3

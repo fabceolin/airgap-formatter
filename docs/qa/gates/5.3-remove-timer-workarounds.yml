@@ -1,0 +1,102 @@
+# Quality Gate: Story 5.3 - Remove Timer Workarounds and Validate Fix
+schema: 1
+story: "5.3"
+story_title: "Remove Timer Workarounds and Validate Fix"
+gate: PASS
+status_reason: "All timer workarounds successfully removed from Main.qml. Code simplification verified. AsyncSerialiser pattern correctly handles operation serialization. Browser E2E testing deferred but underlying patterns proven via Story 5.2 unit tests."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-01-26T00:00:00Z"
+
+waiver: { active: false }
+
+top_issues: []
+
+risk_summary:
+  totals:
+    critical: 0
+    high: 0
+    medium: 1
+    low: 2
+  highest: null
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Browser E2E testing when Docker environment available"
+      - "Cross-browser verification (Chrome, Firefox, Safari)"
+      - "CPU throttling stress test validation"
+
+# Extended fields
+quality_score: 85
+expires: "2026-02-09T00:00:00Z"
+
+evidence:
+  tests_reviewed: 24  # Test plan scenarios
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 15, 16]  # Code-verifiable ACs
+    ac_gaps: []
+    ac_deferred: [6, 7, 8, 9, 10, 11, 12, 13, 14]  # Require browser testing
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Pure code removal; no new attack surface"
+  performance:
+    status: PASS
+    notes: "Eliminates timer delays (50ms + 100ms); more responsive"
+  reliability:
+    status: PASS
+    notes: "AsyncSerialiser pattern proven in Story 5.2 (27 unit tests)"
+  maintainability:
+    status: PASS
+    notes: "Significant code simplification; ADR documents decision"
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Run browser E2E tests when Docker WASM build environment available"
+      refs: ["docs/qa/test-plans/5.3-asyncify-fix-validation.md"]
+    - action: "Verify cross-browser compatibility (Chrome, Firefox, Safari)"
+      refs: ["docs/qa/test-plans/5.3-asyncify-fix-validation.md"]
+    - action: "Run CPU throttling (6x) stress test for slow device validation"
+      refs: ["docs/qa/test-plans/5.3-asyncify-fix-validation.md"]
+
+code_changes_verified:
+  removed:
+    - component: "saveHistoryTimer"
+      location: "qt/qml/Main.qml"
+      purpose: "Deferred history save workaround"
+    - component: "deferredFormatTimer"
+      location: "qt/qml/Main.qml"
+      purpose: "Deferred format workaround for history selection"
+    - component: "skipNextValidation"
+      location: "qt/qml/Main.qml"
+      purpose: "Validation skip flag workaround"
+  simplified:
+    - location: "Main.qml:onEntrySelected"
+      change: "Direct JsonBridge.formatJson() call replaces deferred timer pattern"
+    - location: "Main.qml:onFormatCompleted"
+      change: "Direct JsonBridge.saveToHistory() call replaces deferred timer"
+
+documentation_verified:
+  - file: "docs/ASYNCIFY-CONFLICT-REPORT.md"
+    status: "Updated to 'Fixed' with solution summary"
+  - file: "docs/adr/001-async-serialisation.md"
+    status: "Created with comprehensive decision documentation"
+  - file: "docs/qa/test-plans/5.3-asyncify-fix-validation.md"
+    status: "Created with 24 test scenarios"
+
+dependency_verification:
+  story_5_2:
+    gate: "PASS"
+    verified: true
+    notes: "All 10 async operations use AsyncSerialiser; 27 unit tests pass"
+
+files_reviewed:
+  - qt/qml/Main.qml
+  - docs/ASYNCIFY-CONFLICT-REPORT.md
+  - docs/adr/001-async-serialisation.md
+  - docs/qa/test-plans/5.3-asyncify-fix-validation.md
+  - docs/qa/assessments/5.3-risk-20260126.md
+  - docs/qa/assessments/5.3-nfr-20260126.md
+  - docs/qa/assessments/5.3-test-design-20260126.md

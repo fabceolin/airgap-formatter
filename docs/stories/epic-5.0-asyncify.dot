@@ -1,0 +1,46 @@
+digraph epic_5_0_asyncify_resolution {
+    rankdir=TB;
+    node [shape=box, style="rounded"];
+
+    Start [label="Start", shape=ellipse];
+    End [label="End", shape=ellipse];
+
+    // Phase 1: Foundation
+    subgraph cluster_foundation {
+        label="Phase 1: Foundation";
+        style=dashed;
+        color=gray;
+        story_5_1 [label="5.1.async-serialiser"];
+    }
+
+    // Phase 2: Migration
+    subgraph cluster_migration {
+        label="Phase 2: Migration";
+        style=dashed;
+        color=gray;
+        story_5_2 [label="5.2.refactor-async-ops"];
+    }
+
+    // Phase 3: Cleanup
+    subgraph cluster_cleanup {
+        label="Phase 3: Cleanup & Validation";
+        style=dashed;
+        color=gray;
+        story_5_3 [label="5.3.remove-workarounds"];
+    }
+
+    // Phase 4: Future-Proofing (Optional)
+    subgraph cluster_future {
+        label="Phase 4: Future-Proofing (Optional)";
+        style=dashed;
+        color=gray;
+        story_5_4 [label="5.4.jspi-future-proof"];
+    }
+
+    // Dependencies (strictly sequential)
+    Start -> story_5_1;
+    story_5_1 -> story_5_2;
+    story_5_2 -> story_5_3;
+    story_5_3 -> story_5_4;
+    story_5_4 -> End;
+}

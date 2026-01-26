@@ -20,6 +20,7 @@ Rectangle {
     property string selectedIndent: "spaces:4"
     property alias copyButtonText: copyButton.text
     property string viewMode: "tree"  // "tree" or "text"
+    property bool isBusy: JsonBridge.busy  // Track busy state from JsonBridge
 
     RowLayout {
         anchors.fill: parent
@@ -161,6 +162,7 @@ Rectangle {
         Button {
             id: minifyButton
             text: "Minify"
+            enabled: !toolbar.isBusy
             onClicked: toolbar.minifyRequested()
 
             contentItem: Text {
@@ -169,25 +171,28 @@ Rectangle {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 font.pixelSize: 13
+                opacity: minifyButton.enabled ? 1.0 : 0.5
             }
             background: Rectangle {
                 implicitWidth: 70
                 implicitHeight: 34
-                color: minifyButton.hovered ? Theme.backgroundSecondary : "transparent"
+                color: minifyButton.hovered && minifyButton.enabled ? Theme.backgroundSecondary : "transparent"
                 border.color: minifyButton.activeFocus ? Theme.focusRing : Theme.border
                 border.width: minifyButton.activeFocus ? Theme.focusRingWidth : 1
                 radius: 4
+                opacity: minifyButton.enabled ? 1.0 : 0.5
             }
 
             ToolTip.visible: hovered
-            ToolTip.text: "Minify JSON (Ctrl+M)"
+            ToolTip.text: toolbar.isBusy ? "Processing..." : "Minify JSON (Ctrl+M)"
             ToolTip.delay: 500
         }
 
         // FORMAT button (PRIMARY CTA)
         Button {
             id: formatButton
-            text: "Format"
+            text: toolbar.isBusy ? "..." : "Format"
+            enabled: !toolbar.isBusy
             onClicked: toolbar.formatRequested(toolbar.selectedIndent)
 
             contentItem: Text {
@@ -197,11 +202,13 @@ Rectangle {
                 verticalAlignment: Text.AlignVCenter
                 font.pixelSize: 14
                 font.weight: Font.DemiBold
+                opacity: formatButton.enabled ? 1.0 : 0.7
             }
             background: Rectangle {
                 implicitWidth: 90
                 implicitHeight: 36
-                color: formatButton.pressed ? Qt.darker(Theme.accent, 1.2) :
+                color: !formatButton.enabled ? Qt.darker(Theme.accent, 1.3) :
+                       formatButton.pressed ? Qt.darker(Theme.accent, 1.2) :
                        formatButton.hovered ? Qt.lighter(Theme.accent, 1.1) : Theme.accent
                 border.color: formatButton.activeFocus ? Theme.focusRing : "transparent"
                 border.width: formatButton.activeFocus ? Theme.focusRingWidth : 0
@@ -209,7 +216,7 @@ Rectangle {
             }
 
             ToolTip.visible: hovered
-            ToolTip.text: "Format JSON (Ctrl+Enter)"
+            ToolTip.text: toolbar.isBusy ? "Processing..." : "Format JSON (Ctrl+Enter)"
             ToolTip.delay: 500
         }
 

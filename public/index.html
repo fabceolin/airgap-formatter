@@ -71,6 +71,9 @@
         <div class="status" id="status">Loading Qt WASM...</div>
     </div>
 
+    <!-- JSPI Feature Detection (must load before app initialization) -->
+    <script src="jspi-detect.js"></script>
+
     <!-- Service Worker Registration -->
     <script>
         if ('serviceWorker' in navigator) {

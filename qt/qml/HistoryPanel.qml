@@ -49,6 +49,29 @@ Drawer {
         }
     }
 
+    // Connect to JsonBridge signals for async history operations
+    Connections {
+        target: JsonBridge
+
+        function onHistoryLoaded(entries) {
+            historyDrawer.historyEntries = entries || [];
+            historyDrawer.isLoading = false;
+        }
+
+        function onHistoryEntryDeleted(success) {
+            if (success) {
+                // Refresh the history list after delete
+                JsonBridge.loadHistory();
+            }
+        }
+
+        function onHistoryCleared(success) {
+            if (success) {
+                historyDrawer.historyEntries = [];
+            }
+        }
+    }
+
     // Load history when drawer opens
     onOpened: {
         loadHistoryData();
@@ -57,19 +80,18 @@ Drawer {
 
     function loadHistoryData() {
         isLoading = true;
-        const entries = JsonBridge.loadHistory();
-        historyEntries = entries || [];
-        isLoading = false;
+        // Async call - result comes via onHistoryLoaded signal
+        JsonBridge.loadHistory();
     }
 
     function deleteEntry(id) {
+        // Async call - result comes via onHistoryEntryDeleted signal
         JsonBridge.deleteHistoryEntry(id);
-        loadHistoryData();
     }
 
     function clearAllHistory() {
+        // Async call - result comes via onHistoryCleared signal
         JsonBridge.clearHistory();
-        historyEntries = [];
     }
 
     function selectEntry(entry) {
