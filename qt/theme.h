@@ -76,7 +76,7 @@ public:
     void setDarkMode(bool dark);
 
     // App version
-    QString appVersion() const { return QStringLiteral("0.1.4"); }
+    QString appVersion() const { return QStringLiteral("0.1.6"); }
 
     // Background colors
     QColor background() const { return m_darkMode ? QColor("#1e1e1e") : QColor("#f5f5f5"); }

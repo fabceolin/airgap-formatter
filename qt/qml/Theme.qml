@@ -5,7 +5,7 @@ QtObject {
     id: theme
 
     // App version
-    readonly property string appVersion: "0.1.4"
+    readonly property string appVersion: "0.1.6"
 
     // Theme mode
     property bool darkMode: true
