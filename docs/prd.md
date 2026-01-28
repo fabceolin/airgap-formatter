@@ -1,26 +1,39 @@
-# Airgap JSON Formatter - Product Requirements Document (PRD)
+# Airgap Multi-Format Formatter - Product Requirements Document (PRD)
 
 ## 1. Goals and Background Context
 
 ### 1.1 Goals
 
-- Provide developers with a secure, privacy-first JSON formatting tool that processes data entirely client-side
-- Enable offline JSON manipulation after initial application load with zero network dependencies
+- Provide developers with a secure, privacy-first **multi-format** formatting tool that processes data entirely client-side
+- Enable offline manipulation of **JSON, XML, Markdown, YAML, DOT, and Mermaid diagrams** after initial application load with zero network dependencies
 - Deliver desktop-grade performance and UX through Rust/WASM with Qt interface in the browser
-- Support handling of sensitive JSON payloads (API keys, PII, credentials) without data leaving the device
+- Support handling of sensitive payloads (API keys, PII, credentials, internal documentation) without data leaving the device
 - Deploy as a static site on GitHub Pages for easy access and zero backend maintenance
+- **Auto-detect format** from pasted content for seamless user experience
 
 ### 1.2 Background Context
 
-Developers frequently need to format, validate, and inspect JSON data containing sensitive information such as API keys, authentication tokens, personally identifiable information (PII), and production credentials. Existing online JSON tools pose significant privacy and security risks as they may transmit data to external servers, log inputs, or be subject to man-in-the-middle attacks.
+Developers frequently need to format, validate, and inspect data in various formats containing sensitive information such as API keys, authentication tokens, personally identifiable information (PII), production credentials, and internal documentation with architecture diagrams. Existing online tools pose significant privacy and security risks as they may transmit data to external servers, log inputs, or be subject to man-in-the-middle attacks.
 
-Airgap JSON Formatter addresses this gap by providing a web-accessible tool that executes 100% client-side using WebAssembly. Once the WASM binary loads, the application makes zero external API calls - users can even disconnect from the internet and continue working. This architecture combines the convenience of web-based tools with the security guarantees of offline desktop applications.
+Airgap Multi-Format Formatter addresses this gap by providing a web-accessible tool that executes 100% client-side using WebAssembly. Once the WASM binary loads, the application makes zero external API calls - users can even disconnect from the internet and continue working. This architecture combines the convenience of web-based tools with the security guarantees of offline desktop applications.
 
-### 1.3 Change Log
+### 1.3 Supported Formats
+
+| Format | Capabilities | Library |
+|--------|-------------|---------|
+| **JSON** | Format, minify, validate, tree view, syntax highlight | `serde_json` (Rust) |
+| **XML** | Format, minify, tree view, syntax highlight | `quick-xml` (Rust) |
+| **Markdown** | Render to HTML, syntax highlight source | `comrak` (Rust) |
+| **Mermaid** | Render diagrams to SVG (embedded in Markdown) | `mermaid.js` (JS) |
+| **YAML** | Format, validate, syntax highlight | *Epic 11 - Planned* |
+| **DOT** | Render GraphViz diagrams to SVG | *Epic 12 - Planned* |
+
+### 1.4 Change Log
 
 | Date | Version | Description | Author |
 |------|---------|-------------|--------|
 | 2025-01-20 | 1.0 | Initial PRD creation | Sarah (PO) |
+| 2026-01-28 | 2.0 | Expanded to multi-format tool (JSON+XML+Markdown+YAML+DOT+Mermaid) | Sarah (PO) |
 
 ---
 
@@ -28,15 +41,46 @@ Airgap JSON Formatter addresses this gap by providing a web-accessible tool that
 
 ### 2.1 Functional Requirements
 
-- **FR1:** The application shall accept JSON input via a text input area where users can paste or type JSON content
-- **FR2:** The application shall format/prettify JSON with configurable indentation (2 spaces, 4 spaces, tabs)
-- **FR3:** The application shall minify JSON by removing all unnecessary whitespace
-- **FR4:** The application shall validate JSON syntax and display clear error messages with line/column positions for invalid JSON
-- **FR5:** The application shall highlight syntax errors visually in the input area
-- **FR6:** The application shall provide a copy-to-clipboard function for formatted output
-- **FR7:** The application shall display the formatted/validated JSON in a read-only output area
-- **FR8:** The application shall show JSON statistics (object count, array count, string count, total keys, nesting depth)
-- **FR9:** The application shall support JSON files up to 10MB in size without significant performance degradation
+#### Core Formatting (All Formats)
+- **FR1:** The application shall accept content input via a text input area where users can paste or type content
+- **FR2:** The application shall **auto-detect format** from pasted content (JSON, XML, Markdown, YAML, DOT)
+- **FR3:** The application shall allow manual format override via toolbar selector
+- **FR4:** The application shall provide a copy-to-clipboard function for formatted output
+- **FR5:** The application shall display the formatted output in a read-only output area
+- **FR6:** The application shall support files up to 10MB in size without significant performance degradation
+
+#### JSON-Specific
+- **FR-JSON-1:** Format/prettify JSON with configurable indentation (2 spaces, 4 spaces, tabs)
+- **FR-JSON-2:** Minify JSON by removing all unnecessary whitespace
+- **FR-JSON-3:** Validate JSON syntax and display clear error messages with line/column positions
+- **FR-JSON-4:** Highlight syntax errors visually in the input area
+- **FR-JSON-5:** Show JSON statistics (object count, array count, string count, total keys, nesting depth)
+- **FR-JSON-6:** Provide collapsible tree view for JSON structure navigation
+
+#### XML-Specific
+- **FR-XML-1:** Format/prettify XML with configurable indentation
+- **FR-XML-2:** Minify XML by removing unnecessary whitespace
+- **FR-XML-3:** Validate XML well-formedness and display error messages
+- **FR-XML-4:** Syntax highlight XML elements, attributes, and values
+- **FR-XML-5:** Provide collapsible tree view for XML structure navigation
+
+#### Markdown + Mermaid-Specific
+- **FR-MD-1:** Render Markdown to HTML with GFM support (tables, strikethrough, task lists)
+- **FR-MD-2:** Detect and render embedded Mermaid diagram blocks as SVG
+- **FR-MD-3:** Display rendered HTML in preview pane
+- **FR-MD-4:** Show syntax-highlighted raw HTML in code view
+- **FR-MD-5:** Support common Mermaid diagram types: flowchart, sequence, class, state, ER, gantt, pie, mindmap
+- **FR-MD-6:** Display clear error messages for invalid Mermaid syntax
+
+#### YAML-Specific (Epic 11 - Planned)
+- **FR-YAML-1:** Format/prettify YAML with proper indentation
+- **FR-YAML-2:** Validate YAML syntax and display error messages
+- **FR-YAML-3:** Syntax highlight YAML keys, values, and structure
+
+#### DOT/GraphViz-Specific (Epic 12 - Planned)
+- **FR-DOT-1:** Render DOT diagrams to SVG
+- **FR-DOT-2:** Display clear error messages for invalid DOT syntax
+- **FR-DOT-3:** Support common graph types (digraph, graph, subgraph)
 
 ### 2.2 Non-Functional Requirements
 
@@ -69,9 +113,12 @@ A clean, professional, developer-focused interface that prioritizes functionalit
 
 - **Main Editor View:** The primary (and only) screen containing:
   - Input text area with syntax highlighting
-  - Output text area (read-only) with syntax highlighting
-  - Toolbar with format/minify/copy actions and indentation settings
-  - Status bar showing validation state, error details, and JSON statistics
+  - Output area with multiple view modes:
+    - **Code View:** Syntax-highlighted formatted output (JSON, XML, HTML)
+    - **Tree View:** Collapsible structure navigation (JSON, XML)
+    - **Preview View:** Rendered HTML display (Markdown, Mermaid, DOT)
+  - Toolbar with format/minify/copy actions, indentation settings, and **format selector**
+  - Status bar showing validation state, error details, and content statistics
   - Privacy indicator showing "Offline Mode" / "Zero Network" status
 
 ### 3.4 Accessibility: WCAG AA
@@ -139,24 +186,78 @@ Single repository containing all components:
 - **WASM Target:** `wasm32-unknown-unknown`
 - **Build Tool:** Cargo with wasm-pack or similar for WASM compilation
 - **Qt WASM:** Qt for WebAssembly (official Qt WASM support)
-- **JSON Library:** `serde_json` for Rust JSON handling
 - **Deployment:** GitHub Pages with GitHub Actions for CI/CD
 - **Caching:** Service Worker using Workbox or minimal custom implementation
 - **No External Dependencies:** No CDN resources, analytics, or third-party scripts after initial load
+
+### 4.5 Format Processing Libraries
+
+| Format | Library | Location | Size Impact |
+|--------|---------|----------|-------------|
+| JSON | `serde_json` | Rust/WASM | Baseline |
+| XML | `quick-xml` | Rust/WASM | +58KB |
+| Markdown | `comrak` | Rust/WASM | +150KB |
+| Mermaid | `mermaid.js` | JS (bundled) | +2MB |
+| YAML | `serde_yaml` | Rust/WASM | +TBD |
+| DOT | TBD | JS or WASM | +TBD |
+
+**Bundle Size Strategy:**
+- Core WASM (JSON+XML+Markdown): Target < 1MB gzipped
+- Mermaid.js: Loaded separately, lazy-load if possible
+- Total application: Target < 15MB (acceptable for offline-first tool)
 
 ---
 
 ## 5. Epic List
 
-### Epic 1: Project Foundation & Core JSON Engine
+### Foundation Epics (Completed)
+
+#### Epic 1: Project Foundation & Core JSON Engine
 Establish project infrastructure, build pipeline, and implement core Rust JSON processing logic with basic WASM compilation.
 
-### Epic 2: Qt UI Integration & Full Application
+#### Epic 2: Qt UI Integration & Full Application
 Integrate Qt WASM UI with Rust backend, implement the complete user interface, and deploy to GitHub Pages with offline support.
+
+### Enhancement Epics (Completed)
+
+#### Epic 3: Collapsible JSON TreeView
+Interactive collapsible JSON TreeView for easier navigation of large JSON documents.
+
+#### Epic 4: Document History
+IndexedDB-based history storage with SHA-256 deduplication for document persistence.
+
+#### Epic 5: Async Operation Serialization
+AsyncSerialiser for managing concurrent WASM operations safely.
+
+#### Epic 6: Share via URL
+Time-limited URL sharing with compressed, encoded payloads.
+
+#### Epic 7: XML Formatting Spike
+Technical feasibility investigation for XML support.
+
+### Multi-Format Expansion Epics
+
+#### Epic 8: XML Formatting Support *(In Progress)*
+Full XML support: format, minify, tree view, syntax highlighting with auto-detection.
+
+#### Epic 9: Time-Limited URL Sharing
+Share formatted content via URL with expiration.
+
+#### Epic 10: Markdown + Mermaid Support *(Planned)*
+Render Markdown to HTML with embedded Mermaid diagrams as SVG.
+
+#### Epic 11: YAML Support *(Planned)*
+Format, validate, and syntax highlight YAML content.
+
+#### Epic 12: DOT/GraphViz Support *(Planned)*
+Render DOT graph definitions to SVG diagrams.
 
 ---
 
 ## 6. Epic Details
+
+> **Note:** Detailed epic specifications for Epics 3+ are maintained in `docs/stories/X.0.*.md` files.
+> The details below cover the original foundation epics for historical reference.
 
 ### Epic 1: Project Foundation & Core JSON Engine
 
