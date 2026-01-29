@@ -1,0 +1,224 @@
+name: Deploy Branch Preview
+
+on:
+  push:
+    branches:
+      - 'development'
+      - 'feature/**'
+      - 'fix/**'
+      - 'preview/**'
+    # Exclude main branch and tags (handled by deploy.yml)
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy (leave empty for current branch)'
+        required: false
+        type: string
+
+permissions:
+  contents: write  # Need write to push to gh-pages branch
+
+env:
+  CARGO_TERM_COLOR: always
+  QT_VERSION: '6.10.1'
+  EMSDK_VERSION: '4.0.7'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+
+      - name: Extract branch name
+        id: branch
+        run: |
+          if [[ -n "${{ github.event.inputs.branch }}" ]]; then
+            BRANCH="${{ github.event.inputs.branch }}"
+          else
+            BRANCH="${GITHUB_REF#refs/heads/}"
+          fi
+          # Sanitize branch name for use as URL path (replace / with -)
+          SAFE_BRANCH=$(echo "$BRANCH" | sed 's|/|-|g' | sed 's|[^a-zA-Z0-9_-]|-|g')
+          echo "BRANCH=$BRANCH" >> $GITHUB_OUTPUT
+          echo "SAFE_BRANCH=$SAFE_BRANCH" >> $GITHUB_OUTPUT
+          echo "Deploying branch: $BRANCH as /$SAFE_BRANCH"
+
+      - name: Get version from VERSION file
+        id: version
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (branch: ${{ steps.branch.outputs.BRANCH }})"
+
+      - name: Update version in source files
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          BRANCH="${{ steps.branch.outputs.SAFE_BRANCH }}"
+
+          # Update Theme.qml (QML singleton) - append branch name
+          sed -i "s/readonly property string appVersion: \".*\"/readonly property string appVersion: \"$VERSION-$BRANCH\"/" qt/qml/Theme.qml
+          echo "Updated Theme.qml:"
+          grep appVersion qt/qml/Theme.qml
+
+          # Update theme.h (C++ Theme class used by Qt WASM)
+          sed -i "s/return QStringLiteral(\"[0-9]*\.[0-9]*\.[0-9]*\")/return QStringLiteral(\"$VERSION-$BRANCH\")/" qt/theme.h
+          echo "Updated theme.h:"
+          grep appVersion qt/theme.h
+
+          # Update main.cpp (Qt application version)
+          sed -i "s/setApplicationVersion(\"[0-9]*\.[0-9]*\.[0-9]*\")/setApplicationVersion(\"$VERSION-$BRANCH\")/" qt/main.cpp
+          echo "Updated main.cpp:"
+          grep setApplicationVersion qt/main.cpp
+
+          # Update service worker cache version
+          sed -i "s/const CACHE_NAME = 'airgap-json-formatter-v[^']*'/const CACHE_NAME = 'airgap-json-formatter-v$VERSION-$BRANCH'/" public/sw.js
+          echo "Updated sw.js:"
+          grep CACHE_NAME public/sw.js
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml', 'src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli
+
+      - name: Build Rust WASM
+        run: |
+          cargo build --target wasm32-unknown-unknown --release
+          mkdir -p dist/pkg
+          wasm-bindgen target/wasm32-unknown-unknown/release/airgap_json_formatter.wasm \
+              --out-dir dist/pkg \
+              --typescript \
+              --target web
+
+      - name: Check Rust WASM size
+        run: |
+          SIZE=$(stat -c%s dist/pkg/airgap_json_formatter_bg.wasm)
+          echo "Rust WASM size: $SIZE bytes ($(($SIZE / 1024)) KB)"
+          gzip -k dist/pkg/airgap_json_formatter_bg.wasm
+          GZIP_SIZE=$(stat -c%s dist/pkg/airgap_json_formatter_bg.wasm.gz)
+          echo "Gzipped size: $GZIP_SIZE bytes ($(($GZIP_SIZE / 1024)) KB)"
+          rm dist/pkg/airgap_json_formatter_bg.wasm.gz
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+          actions-cache-folder: 'emsdk-cache'
+
+      - name: Verify Emscripten
+        run: |
+          emcc --version
+          echo "EMSDK: $EMSDK"
+
+      - name: Install Qt WASM
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: 'all_os'
+          target: 'wasm'
+          arch: 'wasm_singlethread'
+          modules: 'qtshadertools'
+          cache: true
+
+      - name: Verify Qt Installation
+        run: |
+          echo "Qt installation directory:"
+          ls -la $QT_ROOT_DIR/
+          echo "Qt bin directory:"
+          ls -la $QT_ROOT_DIR/bin/ || echo "No bin directory"
+          echo "Looking for qt-cmake:"
+          find $QT_ROOT_DIR -name "qt-cmake*" 2>/dev/null || echo "qt-cmake not found"
+
+      - name: Build Qt WASM
+        run: |
+          cd qt
+          mkdir -p build && cd build
+
+          QT_CMAKE=$(find $QT_ROOT_DIR -name "qt-cmake" -type f | head -1)
+          echo "Using qt-cmake: $QT_CMAKE"
+          chmod +x "$QT_CMAKE"
+
+          "$QT_CMAKE" .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --parallel $(nproc)
+
+          echo "Build output:"
+          ls -la
+
+          for ext in wasm js html; do
+            for file in *.$ext; do
+              if [ -f "$file" ]; then
+                cp "$file" ../../dist/
+                echo "Copied: $file"
+              fi
+            done
+          done
+
+          if [ -f "qtloader.js" ]; then
+            cp qtloader.js ../../dist/
+          fi
+
+      - name: Copy static assets
+        run: |
+          cp public/index.html dist/
+          cp public/bridge.js dist/
+          cp public/history-storage.js dist/
+          cp public/sw.js dist/
+          cp public/manifest.json dist/
+          cp public/404.html dist/
+          cp public/icon-192.png dist/
+          cp public/icon-512.png dist/
+
+          # Copy mermaid config and libs if they exist
+          if [ -f "public/mermaid-config.js" ]; then
+            cp public/mermaid-config.js dist/
+          fi
+          if [ -d "public/lib" ]; then
+            cp -r public/lib dist/
+          fi
+
+          # Copy jspi-detect.js if it exists
+          if [ -f "public/jspi-detect.js" ]; then
+            cp public/jspi-detect.js dist/
+          fi
+
+      - name: List build artifacts
+        run: |
+          echo "=== Build Output ==="
+          find dist -type f -exec ls -lh {} \;
+          echo ""
+          echo "=== Total size ==="
+          du -sh dist/
+
+      - name: Deploy to GitHub Pages (branch subdirectory)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          destination_dir: ${{ steps.branch.outputs.SAFE_BRANCH }}
+          keep_files: true  # Keep other branch deployments
+          commit_message: "Deploy branch ${{ steps.branch.outputs.BRANCH }} to /${{ steps.branch.outputs.SAFE_BRANCH }}"
+
+      - name: Output deployment URL
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          OWNER="${GITHUB_REPOSITORY%/*}"
+          echo "=========================================="
+          echo "Branch deployed successfully!"
+          echo "URL: https://$OWNER.github.io/$REPO_NAME/${{ steps.branch.outputs.SAFE_BRANCH }}/"
+          echo "=========================================="
