@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<regressionTest>
+    <metadata>
+        <name>Regression Test</name>
+        <version>1.0.0</version>
+        <description>XML file for regression testing</description>
+    </metadata>
+
+    <features>
+        <feature name="formatting" enabled="true"/>
+        <feature name="treeView" enabled="true"/>
+        <feature name="validation" enabled="true"/>
+    </features>
+
+    <nested>
+        <level1>
+            <level2>
+                <level3>
+                    <deepValue>This tests deep nesting</deepValue>
+                </level3>
+            </level2>
+        </level1>
+    </nested>
+
+    <items>
+        <item id="1">First item</item>
+        <item id="2">Second item</item>
+        <item id="3">Third item</item>
+    </items>
+
+    <types>
+        <string>hello</string>
+        <number>42</number>
+        <float>3.14159</float>
+        <boolean>true</boolean>
+        <empty></empty>
+        <selfClosing/>
+    </types>
+
+    <special>
+        <unicode>Hello &#19990;&#30028;</unicode>
+        <escaped>Line1
+Line2</escaped>
+        <cdata><![CDATA[
+            <script>This should be preserved as CDATA</script>
+        ]]></cdata>
+        <entities>&lt;tag&gt; &amp; "quotes"</entities>
+    </special>
+
+    <attributes test="value" another="attribute">
+        Content with attributes
+    </attributes>
+
+    <!-- This is a comment that should be preserved -->
+
+    <mixedContent>
+        Text before <inline>inline element</inline> text after
+    </mixedContent>
+</regressionTest>

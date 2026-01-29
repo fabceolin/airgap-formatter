@@ -281,3 +281,31 @@ target_link_libraries(tst_xml_integration PRIVATE
 )
 
 add_test(NAME tst_xml_integration COMMAND tst_xml_integration)
+
+# Markdown Integration tests (Story 10.8)
+qt_add_executable(tst_markdown_integration
+    integration/tst_markdown_integration.cpp
+    ../asyncserialiser.cpp
+    ../asyncserialiser.h
+    ../jsonbridge.cpp
+    ../jsonbridge.h
+    ../qjsontreemodel.cpp
+    ../qjsontreemodel.h
+    ../qjsontreeitem.cpp
+    ../qjsontreeitem.h
+    ../qxmltreemodel.cpp
+    ../qxmltreemodel.h
+    ../qxmltreeitem.cpp
+    ../qxmltreeitem.h
+)
+
+target_include_directories(tst_markdown_integration PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+target_link_libraries(tst_markdown_integration PRIVATE
+    Qt6::Core
+    Qt6::Test
+    Qt6::Gui
+    Qt6::Quick
+)
+
+add_test(NAME tst_markdown_integration COMMAND tst_markdown_integration)
