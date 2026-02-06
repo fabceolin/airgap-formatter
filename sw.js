@@ -3,7 +3,7 @@
  * Enables offline functionality by caching all application assets
  */
 
-const CACHE_NAME = 'airgap-json-formatter-v0.1.8';
+const CACHE_NAME = 'airgap-json-formatter-v0.1.9';
 
 // Assets to precache for offline use (relative paths for GitHub Pages compatibility)
 const PRECACHE_ASSETS = [
